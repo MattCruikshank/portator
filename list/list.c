@@ -37,8 +37,7 @@ int main(void) {
     cJSON *app;
     cJSON_ArrayForEach(app, apps) {
         cJSON *name = cJSON_GetObjectItemCaseSensitive(app, "name");
-        cJSON *type = cJSON_GetObjectItemCaseSensitive(app, "type");
-        printf("  %-10s %s\n", name->valuestring, type->valuestring);
+        printf("  %s\n", name->valuestring);
     }
 
     cJSON_Delete(root);

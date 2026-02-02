@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <utime.h>
 #include <libgen.h>
+#include <dirent.h>
 
 #include "blink/assert.h"
 #include "blink/bus.h"
@@ -383,11 +384,54 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
 
 #define PORTATOR_VERSION "0.1.0"
 
-static const char kAppListJson[] =
-    "{\"apps\":["
-    "{\"name\":\"snake\",\"type\":\"console\"},"
-    "{\"name\":\"list\",\"type\":\"console\"}"
-    "]}";
+/* Build a JSON string like {"apps":[{"name":"snake"},{"name":"list"}]}
+   by scanning for directories where <name>/<name>.c exists.
+   Caller must free() the result. */
+static char *BuildAppListJson(void) {
+  DIR *d;
+  struct dirent *ent;
+  char probe[PATH_MAX];
+  char *json;
+  size_t cap = 512, len = 0;
+  int first = 1;
+
+  json = (char *)malloc(cap);
+  if (!json) return NULL;
+
+  len += snprintf(json + len, cap - len, "{\"apps\":[");
+
+  d = opendir(".");
+  if (d) {
+    while ((ent = readdir(d)) != NULL) {
+      if (ent->d_name[0] == '.') continue;
+      snprintf(probe, sizeof(probe), "%s/bin/%s", ent->d_name, ent->d_name);
+      if (access(probe, F_OK) == 0) {
+        /* grow buffer if needed */
+        size_t need = len + strlen(ent->d_name) + 32;
+        if (need > cap) {
+          cap = need * 2;
+          char *tmp = (char *)realloc(json, cap);
+          if (!tmp) { free(json); closedir(d); return NULL; }
+          json = tmp;
+        }
+        if (!first) json[len++] = ',';
+        len += snprintf(json + len, cap - len,
+                        "{\"name\":\"%s\"}", ent->d_name);
+        first = 0;
+      }
+    }
+    closedir(d);
+  }
+
+  /* grow if needed for closing */
+  if (len + 4 > cap) {
+    char *tmp = (char *)realloc(json, len + 4);
+    if (!tmp) { free(json); return NULL; }
+    json = tmp;
+  }
+  len += snprintf(json + len, 4, "]}");
+  return json;
+}
 
 extern i64 (*OnPortatorSyscall)(struct Machine *, u64, u64, u64, u64,
                                 u64, u64, u64);
@@ -404,12 +448,14 @@ static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
       return vlen;
     }
     case 0x7007: {  /* list: di=buf_ptr, si=buf_len */
-      size_t jlen = strlen(kAppListJson) + 1;
-      if (!di || !si) return jlen;
+      char *json = BuildAppListJson();
+      if (!json) return -1;
+      size_t jlen = strlen(json) + 1;
+      if (!di || !si) { free(json); return jlen; }
       if (jlen > (u64)si) jlen = si;
-      if (CopyToUserWrite(m, di, (void *)kAppListJson, jlen))
-        return -1;
-      return jlen;
+      i64 rc = CopyToUserWrite(m, di, (void *)json, jlen) ? -1 : (i64)jlen;
+      free(json);
+      return rc;
     }
     default:
       return -1;
