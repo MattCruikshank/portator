@@ -38,12 +38,12 @@ When Portator runs as a console-native application, console apps are just forwar
 
 Portator discovers guest programs from multiple locations:
 
-1. **`/zip/bin/`** — programs bundled inside the Portator APE binary
-2. **`*/bin/`** — any subfolder's `bin/` directory relative to where Portator is launched
+1. **`/zip/apps/<name>/bin/<name>`** — programs bundled inside the Portator APE binary's zip store, under `apps/`
+2. **`<name>/bin/<name>`** — any subfolder's `bin/` directory relative to where Portator is launched
 
-Both are scanned and merged into a single list. If the same program name appears in multiple locations, the one with the most recent modification time is used by default.
+Both are scanned and merged into a single list. If the same program name appears in multiple locations, the local one takes precedence.
 
-This means project folders, extracted tools, and bundled programs are all discovered the same way.
+The zip store mirrors the same `<name>/bin/<name>` structure under an `apps/` prefix, so bundled and local programs follow the same convention. This means project folders, extracted tools, and bundled programs are all discovered the same way.
 
 ## Command Line Interface
 
@@ -116,12 +116,12 @@ Lists all discovered programs — name, app type (console/gui/web), source locat
 
 ```
 $ portator list
-NAME       TYPE      SOURCE              MODIFIED
-snake      gui       snake/bin/snake      2 min ago
-hello      console   /zip/bin/hello       (bundled)
-editor     web       editor/bin/editor    1 hour ago
-build      console   /zip/bin/build       (bundled)
-new        console   /zip/bin/new         (bundled)
+NAME       SOURCE                            MODIFIED
+snake      snake/bin/snake                    2 min ago
+hello      /zip/apps/hello/bin/hello          (bundled)
+editor     editor/bin/editor                  1 hour ago
+build      /zip/apps/build/bin/build          (bundled)
+new        /zip/apps/new/bin/new              (bundled)
 ```
 
 ### `portator test <name>`
@@ -429,7 +429,7 @@ portator/
 1. Build libportator as a static library (`libportator.a`) with a static x86-64 toolchain
 2. Build each guest program, linking against libportator, producing static x86-64 ELFs
 3. Build the Portator host with `fatcosmocc` (APE binary)
-4. Zip guest ELFs (and `package` tool) into the host binary
+4. Zip guest ELFs into the host binary under `apps/<name>/bin/<name>`
 5. For portator-dev: also zip cosmocc into the host binary
 
 ## Progress

@@ -400,25 +400,33 @@ static char *BuildAppListJson(void) {
 
   len += snprintf(json + len, cap - len, "{\"apps\":[");
 
-  d = opendir(".");
-  if (d) {
+  /* Scan local ./<name>/bin/<name> and /zip/apps/<name>/bin/<name> */
+  const char *dirs[] = { ".", "/zip/apps", NULL };
+  int di;
+  for (di = 0; dirs[di]; di++) {
+    d = opendir(dirs[di]);
+    if (!d) continue;
     while ((ent = readdir(d)) != NULL) {
       if (ent->d_name[0] == '.') continue;
-      snprintf(probe, sizeof(probe), "%s/bin/%s", ent->d_name, ent->d_name);
-      if (access(probe, F_OK) == 0) {
-        /* grow buffer if needed */
-        size_t need = len + strlen(ent->d_name) + 32;
-        if (need > cap) {
-          cap = need * 2;
-          char *tmp = (char *)realloc(json, cap);
-          if (!tmp) { free(json); closedir(d); return NULL; }
-          json = tmp;
-        }
-        if (!first) json[len++] = ',';
-        len += snprintf(json + len, cap - len,
-                        "{\"name\":\"%s\"}", ent->d_name);
-        first = 0;
+      snprintf(probe, sizeof(probe), "%s/%s/bin/%s",
+               dirs[di], ent->d_name, ent->d_name);
+      if (access(probe, F_OK) != 0) continue;
+      /* skip if already listed (local overrides bundled) */
+      char needle[PATH_MAX];
+      snprintf(needle, sizeof(needle), "\"%s\"", ent->d_name);
+      if (strstr(json, needle)) continue;
+      /* grow buffer if needed */
+      size_t need = len + strlen(ent->d_name) + 32;
+      if (need > cap) {
+        cap = need * 2;
+        char *tmp = (char *)realloc(json, cap);
+        if (!tmp) { free(json); closedir(d); return NULL; }
+        json = tmp;
       }
+      if (!first) json[len++] = ',';
+      len += snprintf(json + len, cap - len,
+                      "{\"name\":\"%s\"}", ent->d_name);
+      first = 0;
     }
     closedir(d);
   }
@@ -493,17 +501,19 @@ static int CmdRun(int argc, char **argv) {
   }
   name = argv[2];
 
-  /* TODO: implement proper program discovery (scan all star/bin/ dirs) */
+  /* Try local first, then bundled */
   snprintf(elfpath, sizeof(elfpath), "%s/bin/%s", name, name);
-
   if (access(elfpath, F_OK)) {
-    Print(2, "portator: program not found: ");
-    Print(2, elfpath);
-    Print(2, "\n");
-    Print(2, "Try: portator build ");
-    Print(2, name);
-    Print(2, "\n");
-    return 127;
+    snprintf(elfpath, sizeof(elfpath), "/zip/apps/%s/bin/%s", name, name);
+    if (access(elfpath, F_OK)) {
+      Print(2, "portator: program not found: ");
+      Print(2, name);
+      Print(2, "\n");
+      Print(2, "Try: portator build ");
+      Print(2, name);
+      Print(2, "\n");
+      return 127;
+    }
   }
 
   /* Rewrite argv so the guest sees: <name> [args...] */
@@ -540,9 +550,25 @@ int main(int argc, char *argv[]) {
   g_blink_path = argc > 0 ? argv[0] : 0;
   WriteErrorInit();
   InitMap();
-  if (argc < 2) {
-    Print(2, "Usage: portator PROG [ARGS...]\n");
-    return 48;
+  if (argc < 2 || strcmp(argv[1], "help") == 0) {
+    Print(1, "\n");
+    Print(1, "  Portator " PORTATOR_VERSION "\n");
+    Print(1, "  In-Process Emulated App Platform\n");
+    Print(1, "\n");
+    Print(1, "  Usage: portator <command> [args...]\n");
+    Print(1, "\n");
+    Print(1, "  Commands:\n");
+    Print(1, "    new <type> <name>   Create a new project (console, gui, web)\n");
+    Print(1, "    build <name>        Compile a project with cosmocc\n");
+    Print(1, "    run <name>          Run a program in the emulator\n");
+    Print(1, "    list                List discovered programs\n");
+    Print(1, "    init                Extract shared include/src files\n");
+    Print(1, "    web [port]          Start the web UI (default: 6711)\n");
+    Print(1, "    help                Show this message\n");
+    Print(1, "\n");
+    Print(1, "  https://portator.net\n");
+    Print(1, "\n");
+    return 0;
   }
   if (strcmp(argv[1], "init") == 0) {
     return CmdInit(argc, argv);
@@ -572,6 +598,10 @@ int main(int argc, char *argv[]) {
   InitBus();
   if (strcmp(argv[1], "run") == 0) {
     return CmdRun(argc, argv);
+  }
+  if (strcmp(argv[1], "list") == 0) {
+    char *list_argv[] = { argv[0], (char *)"run", (char *)"list", NULL };
+    return CmdRun(3, list_argv);
   }
   if (!Commandv(argv[1], g_pathbuf, sizeof(g_pathbuf))) {
     Print(2, "portator: command not found: ");

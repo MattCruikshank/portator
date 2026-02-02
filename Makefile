@@ -33,6 +33,14 @@ OBJS = bin/portator.o bin/web_server.o bin/mongoose.o
 bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 	zip -qr bin/portator wwwroot include src
+	@rm -rf bin/apps
+	@for f in */bin/*; do \
+	  name=$$(basename "$$f"); \
+	  mkdir -p "bin/apps/$$name/bin"; \
+	  cp "$$f" "bin/apps/$$name/bin/$$name"; \
+	done
+	@cd bin && zip -qr portator apps
+	@rm -rf bin/apps
 
 clean:
 	rm -rf bin
