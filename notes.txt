@@ -50,4 +50,5 @@ make && ./bin/portator /tmp/hello
 
 //////
 
-Want to move on to the next steps in the plan — creating a test ELF guest and adding the custom syscall handlers?
+zipinfo -1 bin/portator
+

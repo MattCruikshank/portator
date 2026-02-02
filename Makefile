@@ -32,6 +32,7 @@ OBJS = bin/portator.o bin/web_server.o bin/mongoose.o
 
 bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	zip -qr bin/portator wwwroot
 
 clean:
 	rm -rf bin

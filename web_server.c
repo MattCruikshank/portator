@@ -30,7 +30,7 @@ int WebServerStart(int port, const char *wwwroot) {
     char addr[64];
     struct mg_connection *c;
 
-    snprintf(s_wwwroot, sizeof(s_wwwroot), "%s", wwwroot ? wwwroot : "wwwroot");
+    snprintf(s_wwwroot, sizeof(s_wwwroot), "%s", wwwroot ? wwwroot : "/zip/wwwroot");
 
     mg_mgr_init(&s_mgr);
     snprintf(addr, sizeof(addr), "http://0.0.0.0:%d", port);
