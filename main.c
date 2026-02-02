@@ -40,6 +40,7 @@ static void Print(int fd, const char *s);
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
 static const char kPortatorH[] =
+"/* Generated code.  Do not edit. */\n"
 "/*---------------------------------------------------------------------*\\\n"
 "| libportator -- Guest-side Portator API                                |\n"
 "\\*---------------------------------------------------------------------*/\n"
@@ -253,6 +254,15 @@ static int CmdBuild(int argc, char **argv) {
     char bindir[PATH_MAX];
     snprintf(bindir, sizeof(bindir), "%s/bin", name);
     if (MakeDir(bindir)) return 1;
+  }
+
+  Print(1, "Writing latest ");
+  {
+    char hpath[PATH_MAX];
+    snprintf(hpath, sizeof(hpath), "%s/portator.h", name);
+    Print(1, hpath);
+    if (WriteFile(hpath, kPortatorH, strlen(kPortatorH))) return 1;
+    Print(1, "...\n");
   }
 
   Print(1, "Building ");

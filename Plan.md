@@ -264,6 +264,27 @@ void portator_run(PortatorApp *app);
 | 0x7003 | ws_send  | (msg_ptr, len)                | 0 on success         |
 | 0x7004 | ws_recv  | (msg_ptr, max_len)            | bytes received, 0 if none |
 | 0x7005 | app_type | ()                            | 0=console, 1=gfx, 2=web |
+| 0x7006 | version  | (buf_ptr, len)                | bytes written, or -1     |
+| 0x7007 | list_programs | (buf_ptr, len)           | see probe/fill pattern   |
+| 0x7008 | launch   | (name_ptr, name_len)          | TBD                      |
+
+### Probe/Fill Calling Convention
+
+Syscalls that return variable-length data (e.g. `list_programs`, `version`) follow a Win32-style probe/fill pattern:
+
+1. **Probe**: Call with `(NULL, 0)`. Returns the number of bytes required for the full response.
+2. **Fill**: Allocate a buffer of at least that size, call again with `(buf_ptr, len)`. Returns the number of bytes written.
+3. **Undersize**: If `len` is non-zero but smaller than required, returns `-1`.
+
+```c
+/* Example: getting the program list */
+long needed = portator_syscall(PORTATOR_SYS_LIST_PROGRAMS, 0, 0, 0);
+char *buf = malloc(needed);
+long written = portator_syscall(PORTATOR_SYS_LIST_PROGRAMS, (long)buf, needed, 0);
+/* buf now contains JSON */
+```
+
+Variable-length responses are returned as JSON. Guest programs use [cJSON](https://github.com/DaveGamble/cJSON) (vendored `cJSON.c`/`cJSON.h`, written out by `portator build` alongside `portator.h`) for parsing.
 
 Event structure (passed to guest via poll):
 
@@ -287,6 +308,27 @@ A fork of Blink with the following changes:
   - Graphical apps: canvas element, framebuffer streamed over WebSocket (or WebRTC)
   - Web apps: new page serving the guest's `index.html`, messages over WebSocket
 - **Multiple concurrent apps**: Fork to serve multiple apps simultaneously (if Blink's code permits reentrancy; may require investigation)
+
+## Web Server
+
+Portator embeds [Mongoose](https://github.com/cesanta/mongoose) (vendored `mongoose.c`/`mongoose.h`) as its HTTP server. The `portator web` subcommand starts the server on port 6711 (overridable via `portator web <port>`).
+
+Static assets are embedded in the APE binary's zip store under `wwwroot/` and served from `/zip/wwwroot/`. This means `portator web` works as a self-contained binary with no external file dependencies.
+
+### Markdown Rendering
+
+Portator uses [md4c](https://github.com/mity/md4c) (vendored `md4c.c`/`md4c.h`, `md4c-html.c`/`md4c-html.h`) to render Markdown files as HTML on the fly.
+
+When the web server receives a GET request for any `.md` file (e.g. `/docs/README.md`), it reads the file, converts it to HTML via md4c, wraps it in a styled page template, and returns it as `text/html`.
+
+To retrieve the raw Markdown source instead of the rendered HTML, append `?raw` to the URL:
+
+```
+GET /docs/README.md        → rendered HTML page
+GET /docs/README.md?raw    → raw Markdown text
+```
+
+md4c is configured with CommonMark extensions enabled (tables, strikethrough, autolinks).
 
 ## Native APE Bypass (Future Idea)
 
