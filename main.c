@@ -12,6 +12,8 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <unistd.h>
+#include <utime.h>
+#include <libgen.h>
 
 #include "blink/assert.h"
 #include "blink/bus.h"
@@ -39,72 +41,78 @@ static void Print(int fd, const char *s);
 │ portator new — project scaffolding                                          │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-static const char kPortatorH[] =
-"/* Generated code.  Do not edit. */\n"
-"/*---------------------------------------------------------------------*\\\n"
-"| libportator -- Guest-side Portator API                                |\n"
-"\\*---------------------------------------------------------------------*/\n"
-"#ifndef PORTATOR_H_\n"
-"#define PORTATOR_H_\n"
-"\n"
-"#include <stddef.h>\n"
-"#include <stdint.h>\n"
-"\n"
-"/* Portator custom syscall numbers */\n"
-"#define PORTATOR_SYS_PRESENT  0x7000\n"
-"#define PORTATOR_SYS_POLL     0x7001\n"
-"#define PORTATOR_SYS_EXIT     0x7002\n"
-"#define PORTATOR_SYS_WS_SEND  0x7003\n"
-"#define PORTATOR_SYS_WS_RECV  0x7004\n"
-"#define PORTATOR_SYS_APP_TYPE 0x7005\n"
-"#define PORTATOR_SYS_VERSION 0x7006\n"
-"\n"
-"/* App types */\n"
-"#define PORTATOR_APP_CONSOLE  0\n"
-"#define PORTATOR_APP_GFX      1\n"
-"#define PORTATOR_APP_WEB      2\n"
-"\n"
-"/* Event types */\n"
-"#define PORTATOR_KEY_DOWN     1\n"
-"#define PORTATOR_KEY_UP       2\n"
-"#define PORTATOR_MOUSE_DOWN   3\n"
-"#define PORTATOR_MOUSE_UP     4\n"
-"#define PORTATOR_MOUSE_MOVE   5\n"
-"\n"
-"struct PortatorEvent {\n"
-"    uint32_t type;\n"
-"    int32_t  x, y;\n"
-"    int32_t  key;\n"
-"    int32_t  button;\n"
-"};\n"
-"\n"
-"/* Syscall wrappers -- not yet implemented on the host side.\n"
-"   Console apps don't need these; they just use stdio. */\n"
-"\n"
-"static inline long portator_syscall(long nr, long a1, long a2, long a3) {\n"
-"    long ret;\n"
-"    __asm__ volatile(\"syscall\"\n"
-"                     : \"=a\"(ret)\n"
-"                     : \"a\"(nr), \"D\"(a1), \"S\"(a2), \"d\"(a3)\n"
-"                     : \"rcx\", \"r11\", \"memory\");\n"
-"    return ret;\n"
-"}\n"
-"\n"
-"static inline long portator_exit(int code) {\n"
-"    return portator_syscall(PORTATOR_SYS_EXIT, code, 0, 0);\n"
-"}\n"
-"\n"
-"static inline long portator_app_type(void) {\n"
-"    return portator_syscall(PORTATOR_SYS_APP_TYPE, 0, 0, 0);\n"
-"}\n"
-"\n"
-"/* Write Portator version string into buf (up to len bytes).\n"
-"   Returns number of bytes written, or -1 on error. */\n"
-"static inline long portator_version(char *buf, long len) {\n"
-"    return portator_syscall(PORTATOR_SYS_VERSION, (long)buf, len, 0);\n"
-"}\n"
-"\n"
-"#endif /* PORTATOR_H_ */\n";
+static int ExtractFromZip(const char *relpath) {
+  char zippath[PATH_MAX];
+  char outpath[PATH_MAX];
+  char parentdir[PATH_MAX];
+  char *parent;
+  FILE *fin, *fout;
+  char buf[4096];
+  size_t n;
+
+  snprintf(zippath, sizeof(zippath), "/zip/%s", relpath);
+  snprintf(outpath, sizeof(outpath), "./%s", relpath);
+
+  /* Create parent directories */
+  snprintf(parentdir, sizeof(parentdir), "%s", outpath);
+  parent = dirname(parentdir);
+  if (mkdir(parent, 0755) && errno != EEXIST) {
+    Print(2, "portator: cannot create directory ");
+    Print(2, parent);
+    Print(2, "\n");
+    return -1;
+  }
+
+  fin = fopen(zippath, "r");
+  if (!fin) {
+    Print(2, "portator: not found in zip: ");
+    Print(2, zippath);
+    Print(2, "\n");
+    return -1;
+  }
+  fout = fopen(outpath, "w");
+  if (!fout) {
+    fclose(fin);
+    Print(2, "portator: cannot create ");
+    Print(2, outpath);
+    Print(2, "\n");
+    return -1;
+  }
+  while ((n = fread(buf, 1, sizeof(buf), fin)) > 0) {
+    fwrite(buf, 1, n, fout);
+  }
+  fclose(fin);
+  fclose(fout);
+  utime(outpath, NULL);
+  return 0;
+}
+
+static const char *kSharedFiles[] = {
+  "include/portator.h",
+  "include/cJSON.h",
+  "src/cJSON.c",
+  NULL
+};
+
+static int ExtractSharedFiles(void) {
+  int i;
+  for (i = 0; kSharedFiles[i]; i++) {
+    if (ExtractFromZip(kSharedFiles[i])) return -1;
+    Print(1, "  ");
+    Print(1, kSharedFiles[i]);
+    Print(1, "\n");
+  }
+  return 0;
+}
+
+static int CmdInit(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
+  Print(1, "Extracting shared files...\n");
+  if (ExtractSharedFiles()) return 1;
+  Print(1, "Done.\n");
+  return 0;
+}
 
 static int WriteFile(const char *path, const char *content, size_t len) {
   FILE *f = fopen(path, "w");
@@ -157,9 +165,11 @@ static int CmdNew(int argc, char **argv) {
   snprintf(path, sizeof(path), "%s/bin", name);
   if (MakeDir(path)) return 1;
 
-  /* Write portator.h */
-  snprintf(path, sizeof(path), "%s/portator.h", name);
-  if (WriteFile(path, kPortatorH, strlen(kPortatorH))) return 1;
+  /* Extract shared include/src if not present */
+  if (access("include", F_OK) || access("src", F_OK)) {
+    Print(1, "Extracting shared files...\n");
+    if (ExtractSharedFiles()) return 1;
+  }
 
   /* Generate source file */
   if (strcmp(type, "console") == 0) {
@@ -204,9 +214,6 @@ static int CmdNew(int argc, char **argv) {
   snprintf(path, sizeof(path), "%s/%s.c\n", name, name);
   Print(1, path);
   Print(1, "  ");
-  snprintf(path, sizeof(path), "%s/portator.h\n", name);
-  Print(1, path);
-  Print(1, "  ");
   snprintf(path, sizeof(path), "%s/bin/\n", name);
   Print(1, path);
   Print(1, "\nBuild with:\n");
@@ -217,6 +224,7 @@ static int CmdNew(int argc, char **argv) {
   snprintf(path, sizeof(path),
     "  portator run %s\n", name);
   Print(1, path);
+  Print(1, "\nHint: Ensure -I./include is in your editor's include path\n");
 
   return 0;
 }
@@ -256,13 +264,10 @@ static int CmdBuild(int argc, char **argv) {
     if (MakeDir(bindir)) return 1;
   }
 
-  Print(1, "Writing latest ");
-  {
-    char hpath[PATH_MAX];
-    snprintf(hpath, sizeof(hpath), "%s/portator.h", name);
-    Print(1, hpath);
-    if (WriteFile(hpath, kPortatorH, strlen(kPortatorH))) return 1;
-    Print(1, "...\n");
+  /* Extract shared files if needed */
+  if (access("include", F_OK) || access("src", F_OK)) {
+    Print(1, "Extracting shared files...\n");
+    if (ExtractSharedFiles()) return 1;
   }
 
   Print(1, "Building ");
@@ -277,7 +282,8 @@ static int CmdBuild(int argc, char **argv) {
   if (pid == 0) {
     execlp("cosmocc", "cosmocc",
            "-static", "-fno-pie", "-no-pie",
-           "-o", out, src, (char *)NULL);
+           "-I./include",
+           "-o", out, src, "./src/cJSON.c", (char *)NULL);
     _exit(127);
   }
   if (waitpid(pid, &status, 0) < 0) {
@@ -477,6 +483,9 @@ int main(int argc, char *argv[]) {
   if (argc < 2) {
     Print(2, "Usage: portator PROG [ARGS...]\n");
     return 48;
+  }
+  if (strcmp(argv[1], "init") == 0) {
+    return CmdInit(argc, argv);
   }
   if (strcmp(argv[1], "new") == 0) {
     return CmdNew(argc, argv);
