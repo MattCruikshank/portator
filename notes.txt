@@ -34,6 +34,9 @@ All the failures:
 make -k check
 
 
+
+//////
+
 echo '#include <stdio.h>
   int main() { printf("Hello from portator!\n"); return 0; }' > /tmp/hello.c
 
@@ -41,3 +44,10 @@ cosmocc -static -fno-pie -no-pie -o /tmp/hello /tmp/hello.c
 
 /tmp/hello
 ./o/blink/blink /tmp/hello
+
+cd ~/source/portator
+make && ./bin/portator /tmp/hello
+
+//////
+
+Want to move on to the next steps in the plan — creating a test ELF guest and adding the custom syscall handlers?

@@ -407,11 +407,12 @@ portator/
 
 ### Next Steps
 
-1. **Create a test ELF** — Compile a simple "hello world" with `cosmocc` to verify Portator can load and run a guest program. Blink does not ship pre-built ELFs.
-2. **Verify basic execution** — Run `bin/portator /path/to/hello` and confirm output.
-3. **Add custom syscall handlers** — Hook into blink's syscall dispatch to handle Portator-specific syscalls (0x7000–0x7005).
-4. **Build `libportator`** — The guest-side library providing `PortatorApp` class hierarchy and syscall wrappers.
-5. **Program discovery** — Implement `*/bin/` scanning and `/zip/bin/` lookup.
+1. ~~**Create a test ELF** — Compile a simple "hello world" with `cosmocc` to verify Portator can load and run a guest program. Blink does not ship pre-built ELFs.~~ **Done** — `cosmocc -static -fno-pie -no-pie -o /tmp/hello /tmp/hello.c`
+2. ~~**Verify basic execution** — Run `bin/portator /path/to/hello` and confirm output.~~ **Done** — `./bin/portator /tmp/hello` works.
+3. **Create `hello` console guest** — Scaffold `hello/hello.c` and `hello/portator.h` as the first real guest project, compile and run under Portator.
+4. **Add custom syscall handlers** — Hook into blink's syscall dispatch to handle Portator-specific syscalls (0x7000–0x7005).
+5. **Build `libportator`** — The guest-side library providing `PortatorApp` class hierarchy and syscall wrappers.
+6. **Program discovery** — Implement `*/bin/` scanning and `/zip/bin/` lookup.
 
 ### Notes
 
