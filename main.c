@@ -55,6 +55,7 @@ static const char kPortatorH[] =
 "#define PORTATOR_SYS_WS_SEND  0x7003\n"
 "#define PORTATOR_SYS_WS_RECV  0x7004\n"
 "#define PORTATOR_SYS_APP_TYPE 0x7005\n"
+"#define PORTATOR_SYS_VERSION 0x7006\n"
 "\n"
 "/* App types */\n"
 "#define PORTATOR_APP_CONSOLE  0\n"
@@ -93,6 +94,12 @@ static const char kPortatorH[] =
 "\n"
 "static inline long portator_app_type(void) {\n"
 "    return portator_syscall(PORTATOR_SYS_APP_TYPE, 0, 0, 0);\n"
+"}\n"
+"\n"
+"/* Write Portator version string into buf (up to len bytes).\n"
+"   Returns number of bytes written, or -1 on error. */\n"
+"static inline long portator_version(char *buf, long len) {\n"
+"    return portator_syscall(PORTATOR_SYS_VERSION, (long)buf, len, 0);\n"
 "}\n"
 "\n"
 "#endif /* PORTATOR_H_ */\n";
@@ -159,6 +166,9 @@ static int CmdNew(int argc, char **argv) {
       "#include \"portator.h\"\n"
       "\n"
       "int main(void) {\n"
+      "    char ver[64];\n"
+      "    if (portator_version(ver, sizeof(ver)) > 0)\n"
+      "        printf(\"Running on %%s\\n\", ver);\n"
       "    printf(\"Hello from %s!\\n\");\n"
       "    return 0;\n"
       "}\n", name);
@@ -350,6 +360,31 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
   _exit(128 + syssig);
 }
 
+/*─────────────────────────────────────────────────────────────────────────────╗
+│ Portator custom syscall handler                                             │
+╚─────────────────────────────────────────────────────────────────────────────*/
+
+#define PORTATOR_VERSION "0.1.0"
+
+extern i64 (*OnPortatorSyscall)(struct Machine *, u64, u64, u64, u64,
+                                u64, u64, u64);
+
+static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
+                                 u64 dx, u64 r0, u64 r8, u64 r9) {
+  switch (ax) {
+    case 0x7006: {  /* version: di=buf_ptr, si=buf_len */
+      const char *ver = "Portator " PORTATOR_VERSION;
+      size_t vlen = strlen(ver);
+      if ((u64)vlen >= si) vlen = si - 1;
+      if (CopyToUserWrite(m, di, (void *)ver, vlen + 1))
+        return -1;
+      return vlen;
+    }
+    default:
+      return -1;
+  }
+}
+
 static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   int i;
   struct Machine *m;
@@ -400,6 +435,7 @@ static int CmdRun(int argc, char **argv) {
 }
 
 int main(int argc, char *argv[]) {
+  OnPortatorSyscall = HandlePortatorSyscall;
   SetupWeb();
   GetStartDir();
   FLAG_nolinear = !CanHaveLinearMemory();

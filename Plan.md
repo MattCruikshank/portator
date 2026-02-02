@@ -404,15 +404,20 @@ portator/
 3. **Created Portator `main.c`** — Minimal wrapper around blink's internals (`LoadProgram`, `Blink`, etc.), linking against `blink.a` and `zlib.a`. Provides `TerminateSignal` (required by `blink.a` but defined outside the archive in blink's own `blink.c`).
 4. **Created standalone `Makefile`** — Compiles `main.c` with `fatcosmocc`, links against blink's pre-built `blink.a` and `zlib.a`. Output goes to `bin/portator`.
 5. **Created `.gitignore`** — Ignores `bin/` and `blink/` directories.
+6. **Verified guest execution** — Compiled a test hello world with `cosmocc -static -fno-pie -no-pie` and ran it successfully under Portator.
+7. **Created `hello` console guest** — `hello/hello.c` and `hello/portator.h` with syscall constants, event struct, and inline syscall wrappers. Compiles and runs under Portator.
+8. **Implemented `portator new <type> <name>`** — Built-in subcommand that scaffolds a project directory with `<name>.c`, `portator.h`, and `bin/`. Supports `console`, `gui`, and `web` types.
+9. **Implemented `portator build <name>`** — Built-in subcommand that shells out to `cosmocc` to compile `<name>/<name>.c` into `<name>/bin/<name>`.
+10. **Implemented `portator run <name>`** — Built-in subcommand that resolves `<name>/bin/<name>` and runs it in the Blink emulator. Fixed a segfault caused by calling `Exec` before Blink runtime init (HandleSigs, InitBus, overlays, VFS).
 
 ### Next Steps
 
-1. ~~**Create a test ELF** — Compile a simple "hello world" with `cosmocc` to verify Portator can load and run a guest program. Blink does not ship pre-built ELFs.~~ **Done** — `cosmocc -static -fno-pie -no-pie -o /tmp/hello /tmp/hello.c`
-2. ~~**Verify basic execution** — Run `bin/portator /path/to/hello` and confirm output.~~ **Done** — `./bin/portator /tmp/hello` works.
-3. **Create `hello` console guest** — Scaffold `hello/hello.c` and `hello/portator.h` as the first real guest project, compile and run under Portator.
-4. **Add custom syscall handlers** — Hook into blink's syscall dispatch to handle Portator-specific syscalls (0x7000–0x7005).
-5. **Build `libportator`** — The guest-side library providing `PortatorApp` class hierarchy and syscall wrappers.
-6. **Program discovery** — Implement `*/bin/` scanning and `/zip/bin/` lookup.
+1. **Add custom syscall handlers** — Hook into blink's syscall dispatch to handle Portator-specific syscalls (0x7000–0x7005). This is needed before graphical or web guests can work.
+2. **Build `libportator`** — The guest-side library providing `PortatorApp` class hierarchy and syscall wrappers. Currently `portator.h` has inline syscall wrappers; this step builds out the full C++ class hierarchy (`PortatorConsoleApp`, `PortatorGraphicalApp`, `PortatorWebApp`).
+3. **Program discovery** — Implement `*/bin/` scanning and `/zip/bin/` lookup. Currently `portator run <name>` only checks `<name>/bin/<name>` by convention.
+4. **Web server** — Serve a menu page listing discovered programs. Console apps get a terminal (GhostTTY/xterm.js), graphical apps get a canvas with framebuffer streaming, web apps get their own pages.
+5. **`portator list`** — List all discovered programs with type, source, and modification time.
+6. **Scaffold `gui` and `web` templates** — `portator new gui` and `portator new web` currently produce stub files. Flesh out with working examples once syscall handlers and the web server are in place.
 
 ### Notes
 
