@@ -28,6 +28,7 @@
 #include "blink/vfs.h"
 #include "blink/web.h"
 #include "blink/xlat.h"
+#include "web_server.h"
 
 extern char **environ;
 static char g_pathbuf[PATH_MAX];
@@ -434,6 +435,24 @@ static int CmdRun(int argc, char **argv) {
   return Exec(elfpath, elfpath, argv + 2, environ);
 }
 
+/*─────────────────────────────────────────────────────────────────────────────╗
+│ portator web — start the web UI                                              │
+╚─────────────────────────────────────────────────────────────────────────────*/
+
+static int CmdWeb(int argc, char **argv) {
+  int port = 6711;
+  if (argc >= 3) port = atoi(argv[2]);
+  if (port <= 0 || port > 65535) {
+    Print(2, "portator: invalid port\n");
+    return 1;
+  }
+  if (WebServerStart(port, "wwwroot")) return 1;
+  Print(1, "Press Enter to stop the server...\n");
+  (void)getchar();
+  WebServerStop();
+  return 0;
+}
+
 int main(int argc, char *argv[]) {
   OnPortatorSyscall = HandlePortatorSyscall;
   SetupWeb();
@@ -454,6 +473,9 @@ int main(int argc, char *argv[]) {
   }
   if (strcmp(argv[1], "build") == 0) {
     return CmdBuild(argc, argv);
+  }
+  if (strcmp(argv[1], "web") == 0) {
+    return CmdWeb(argc, argv);
   }
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {

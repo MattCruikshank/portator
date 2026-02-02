@@ -19,10 +19,18 @@ all: bin/portator
 bin:
 	mkdir -p bin
 
-bin/portator.o: main.c | bin
+bin/portator.o: main.c web_server.h | bin
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-bin/portator: bin/portator.o $(BLINK_A) $(ZLIB_A)
+bin/web_server.o: web_server.c web_server.h mongoose.h | bin
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+bin/mongoose.o: mongoose.c mongoose.h | bin
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DMG_ENABLE_LINES=0 -c -o $@ $<
+
+OBJS = bin/portator.o bin/web_server.o bin/mongoose.o
+
+bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 clean:
