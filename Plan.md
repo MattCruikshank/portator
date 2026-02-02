@@ -65,26 +65,20 @@ Runs a discovered program in the emulator, passing arguments.
 
 ### `portator new <type> <name>`
 
-Scaffolds a new project. Equivalent to `portator run new <type> <name>`. The `new` program is itself a guest.
-
-Creates a project folder with conventional structure:
+Scaffolds a new project. Creates a project folder with conventional structure:
 
 ```
-portator new console hello    →  hello/hello.cpp, hello/portator.hpp, hello/bin/
-portator new gui snake        →  snake/snake.cpp, snake/portator.hpp, snake/bin/
-portator new web dashboard    →  dashboard/dashboard.cpp, dashboard/portator.hpp,
-                                 dashboard/bin/, dashboard/wwwroot/, dashboard/docs/
+portator new console hello    →  hello/hello.c, hello/bin/
+portator new gui snake        →  snake/snake.c, snake/bin/
+portator new web dashboard    →  dashboard/dashboard.c, dashboard/bin/,
+                                 dashboard/wwwroot/, dashboard/docs/
 ```
 
-`portator.hpp` is extracted into the project as a reference/include.
-
-If cosmocc is not available, prompts to download it (see `portator get`).
+Extracts shared `include/` and `src/` files if not already present. Reports which compilers are available on the system (see Compiler Detection below).
 
 ### `portator build <name>`
 
-Compiles a project. Equivalent to `portator run build <name>`. The `build` program is itself a guest.
-
-Follows the convention: finds `<name>/<name>.cpp`, compiles with cosmocc, outputs to `<name>/bin/<name>`. Once built, the program is immediately discoverable by Portator via `*/bin/` scanning.
+Compiles a project. Finds `<name>/<name>.c` (or `.cpp`, `.rs`, `.zig`, `.go`, `.cs`, `.swift`, `.nim`), selects the appropriate compiler, and outputs to `<name>/bin/<name>`. Once built, the program is immediately discoverable by Portator via `*/bin/` scanning. Extracts shared files and reports available compilers if needed.
 
 ### `portator get <name>`
 
@@ -145,6 +139,39 @@ $ portator clean hello
 Removed hello/bin/
 ```
 
+## Compiler Detection
+
+The commands `portator new`, `portator build`, `portator run`, and `portator init` all probe for available compilers on the system using `which` (or equivalent). The detected compilers determine which languages are available for guest development and what `portator build` can compile.
+
+### Detected compilers
+
+| Compiler | Language | Check |
+|----------|----------|-------|
+| `cosmocc` / `cosmo++` | C / C++ | `which cosmocc` |
+| `rustc` | Rust | `which rustc` |
+| `zig` | Zig | `which zig` |
+| `go` | Go | `which go` |
+| `dotnet` | C# (.NET NativeAOT) | `which dotnet` |
+| `swiftc` | Swift | `which swiftc` |
+| `nim` | Nim | `which nim` |
+| `gcc` / `musl-gcc` | C (fallback) | `which musl-gcc` or `which gcc` |
+
+### Behavior
+
+- **`portator init`** — After extracting shared files, prints which compilers are available.
+- **`portator new`** — Reports available compilers. Could offer language choice in the future (e.g. `portator new console hello --lang rust`).
+- **`portator build`** — Detects the source file extension in `<name>/` and selects the compiler automatically:
+  - `.c` → `cosmocc` (or `musl-gcc` / `gcc` as fallback)
+  - `.cpp` → `cosmo++` (or `g++` as fallback)
+  - `.rs` → `rustc` with `--target x86_64-unknown-linux-musl`
+  - `.zig` → `zig build-exe` with `-target x86_64-linux-musl`
+  - `.go` → `go build` with `GOOS=linux GOARCH=amd64 CGO_ENABLED=0`
+  - `.cs` → `dotnet publish -r linux-x64` with NativeAOT
+  - `.swift` → `swiftc` with static linking
+  - `.nim` → `nim c` with `--os:linux --cpu:amd64`
+  - If the required compiler is not found, prints an error with install instructions.
+- **`portator run`** — If the requested program isn't built, suggests `portator build` and notes which compilers are available.
+
 ## Distributions
 
 - **portator** — lightweight distribution. Downloads cosmocc on demand via `portator get cosmocc`.
@@ -189,6 +216,55 @@ package/                # extracted bundled tool
 ```
 
 Portator scans `*/bin/` to find everything — projects, tools, all of it. The convention makes discovery automatic.
+
+## Guest Language Support
+
+Portator runs any static x86-64 Linux ELF. The guest language doesn't matter — only the binary format does. Portator syscalls can be accessed via inline assembly, FFI/C interop, or a thin C shim depending on the language.
+
+### Tier 1 — Straightforward
+
+These languages produce static x86-64 ELFs easily and have natural access to inline asm or C interop for Portator syscalls.
+
+| Language | Target / Toolchain | Syscall Access | Notes |
+|----------|-------------------|----------------|-------|
+| **C** | `cosmocc -static -fno-pie -no-pie` | Inline asm via `portator.h` | Primary supported language. Shared `include/` and `src/` provided. |
+| **C++** | `cosmo++ -static -fno-pie -no-pie` | `#include "portator.hpp"` wrapping `portator.h` | Optional convenience layer with classes. |
+| **Rust** | `x86_64-unknown-linux-musl` | Inline asm or FFI to `portator.h` via `extern "C"` | Produces small static ELFs. Great demo candidate. |
+| **Zig** | `zig build -Dtarget=x86_64-linux-musl` | Built-in inline asm, or `@cImport` of `portator.h` | Excellent C interop. Produces very small binaries. |
+| **Go** | Default `GOOS=linux GOARCH=amd64` (static by default) | cgo shim calling C syscall wrapper | Inline asm not native to Go; needs a small C bridge. |
+
+### Tier 2 — Possible, More Work
+
+These languages can produce static Linux ELFs but require more setup, larger runtimes, or indirect syscall access.
+
+| Language | Target / Toolchain | Syscall Access | Notes |
+|----------|-------------------|----------------|-------|
+| **C# / .NET** | `dotnet publish -r linux-x64` with NativeAOT | P/Invoke to a C shim | Produces large binaries (~10MB+). NativeAOT is required; JIT won't work. |
+| **Swift** | Static Linux toolchain (`swift build --static-swift-stdlib`) | C interop via bridging header | Requires Swift's Linux toolchain. Static linking support is maturing. |
+| **Nim** | Compiles through C with `--os:linux --cpu:amd64 --passL:-static` | `{.importc.}` pragmas against `portator.h` | Naturally produces static ELFs via its C backend. Very lightweight. |
+
+### Tier 3 — Unlikely to Work Well
+
+These have fundamental obstacles but are documented for completeness.
+
+| Language | Issue |
+|----------|-------|
+| **Java (GraalVM native-image)** | Produces static ELFs but very large runtime overhead. Syscall access through JNI is painful. |
+| **JIT-based languages** (Node.js, Python, Ruby, etc.) | Require an interpreter/runtime as a separate process. Cannot produce a single static ELF. Could theoretically run if the interpreter itself is compiled as a static ELF and bundled, but this is not a natural fit. |
+
+### Shared Files
+
+The guest-side shared files are embedded in the APE zip and extracted by `portator init`, `portator new`, or `portator build`:
+
+```
+include/portator.h       # C syscall wrappers (all languages can use via FFI)
+include/cJSON.h          # C JSON parser
+include/portator.hpp     # C++ convenience classes (optional)
+src/cJSON.c              # C JSON parser implementation
+src/portator.cpp         # C++ class implementations (optional)
+```
+
+For non-C/C++ languages, `portator.h` serves as the canonical reference for syscall numbers and calling conventions. Language-specific bindings (e.g. a Rust `portator` crate, a Zig `portator.zig` module) can be added to `include/` and `src/` as demand warrants.
 
 ## App Types
 
