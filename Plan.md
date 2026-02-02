@@ -451,15 +451,21 @@ portator/
 8. **Implemented `portator new <type> <name>`** — Built-in subcommand that scaffolds a project directory with `<name>.c`, `portator.h`, and `bin/`. Supports `console`, `gui`, and `web` types.
 9. **Implemented `portator build <name>`** — Built-in subcommand that shells out to `cosmocc` to compile `<name>/<name>.c` into `<name>/bin/<name>`.
 10. **Implemented `portator run <name>`** — Built-in subcommand that resolves `<name>/bin/<name>` and runs it in the Blink emulator. Fixed a segfault caused by calling `Exec` before Blink runtime init (HandleSigs, InitBus, overlays, VFS).
+11. **Shared `include/` and `src/` folders** — Moved `portator.h` from an embedded C string to `include/portator.h`. Vendored cJSON (`include/cJSON.h`, `src/cJSON.c`). All three are embedded in the APE zip and extracted on demand via `portator init`, `portator new`, or `portator build`.
+12. **Custom syscall: `version` (0x7006)** — Returns the Portator version string to the guest. Uses probe/fill calling convention (call with NULL to get size, then with buffer to fill).
+13. **Custom syscall: `list` (0x7007)** — Dynamically scans for built programs and returns a JSON array to the guest. Scans both local `<name>/bin/<name>` and bundled `/zip/apps/<name>/bin/<name>`.
+14. **Program discovery** — `portator run` checks local `<name>/bin/<name>` first, then falls back to `/zip/apps/<name>/bin/<name>`. The `list` syscall scans both locations, with local taking precedence.
+15. **Bundled apps in APE zip** — `make` stages all built app binaries into `apps/<name>/bin/<name>` inside the APE zip store.
+16. **`portator list`** — Guest program that calls the `list` syscall, parses the JSON with cJSON, and prints discovered program names. Works as both `portator list` and `portator run list`.
+17. **`portator help`** — Displays version, available commands, and website URL. Also shown when running `portator` with no arguments.
+18. **Snake game** — Console-based snake game running as a guest under Portator.
 
 ### Next Steps
 
-1. **Add custom syscall handlers** — Hook into blink's syscall dispatch to handle Portator-specific syscalls (0x7000–0x7005). This is needed before graphical or web guests can work.
-2. **Build `libportator`** — The guest-side library providing `PortatorApp` class hierarchy and syscall wrappers. Currently `portator.h` has inline syscall wrappers; this step builds out the full C++ class hierarchy (`PortatorConsoleApp`, `PortatorGraphicalApp`, `PortatorWebApp`).
-3. **Program discovery** — Implement `*/bin/` scanning and `/zip/bin/` lookup. Currently `portator run <name>` only checks `<name>/bin/<name>` by convention.
-4. **Web server** — Serve a menu page listing discovered programs. Console apps get a terminal (GhostTTY/xterm.js), graphical apps get a canvas with framebuffer streaming, web apps get their own pages.
-5. **`portator list`** — List all discovered programs with type, source, and modification time.
-6. **Scaffold `gui` and `web` templates** — `portator new gui` and `portator new web` currently produce stub files. Flesh out with working examples once syscall handlers and the web server are in place.
+1. **Implement remaining syscalls (0x7000–0x7005)** — `present`, `poll`, `exit`, `ws_send`, `ws_recv`, `app_type`. These are needed before graphical or web guests can work.
+2. **Web server app launching** — `portator web` currently serves static files. It needs to launch guest apps in the browser: terminal (xterm.js/GhostTTY) for console apps, canvas for graphical apps, custom pages for web apps.
+3. **Scaffold `gui` and `web` templates** — `portator new gui` and `portator new web` currently produce stub files. Flesh out with working examples once syscall handlers and the web server are in place.
+4. **`libportator` guest library** — Decide whether to build a C++ class hierarchy (`PortatorConsoleApp`, `PortatorGraphicalApp`, `PortatorWebApp`) or stay with the current C + inline syscall approach. C++ would give cleaner structure for gui/web apps but adds complexity for console apps that don't need it.
 
 ### Notes
 
