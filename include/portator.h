@@ -16,6 +16,7 @@
 #define PORTATOR_SYS_WS_RECV  0x7004
 #define PORTATOR_SYS_APP_TYPE 0x7005
 #define PORTATOR_SYS_VERSION 0x7006
+#define PORTATOR_SYS_LIST    0x7007
 
 /* App types */
 #define PORTATOR_APP_CONSOLE  0
@@ -60,6 +61,13 @@ static inline long portator_app_type(void) {
    Returns number of bytes written, or -1 on error. */
 static inline long portator_version(char *buf, long len) {
     return portator_syscall(PORTATOR_SYS_VERSION, (long)buf, len, 0);
+}
+
+/* Get JSON listing of apps.
+   Call with buf=NULL/len=0 to get required size (including NUL).
+   Call with allocated buffer to fill it. Returns size or -1. */
+static inline long portator_list(char *buf, long len) {
+    return portator_syscall(PORTATOR_SYS_LIST, (long)buf, len, 0);
 }
 
 #endif /* PORTATOR_H_ */

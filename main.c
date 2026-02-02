@@ -383,6 +383,12 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
 
 #define PORTATOR_VERSION "0.1.0"
 
+static const char kAppListJson[] =
+    "{\"apps\":["
+    "{\"name\":\"snake\",\"type\":\"console\"},"
+    "{\"name\":\"list\",\"type\":\"console\"}"
+    "]}";
+
 extern i64 (*OnPortatorSyscall)(struct Machine *, u64, u64, u64, u64,
                                 u64, u64, u64);
 
@@ -396,6 +402,14 @@ static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
       if (CopyToUserWrite(m, di, (void *)ver, vlen + 1))
         return -1;
       return vlen;
+    }
+    case 0x7007: {  /* list: di=buf_ptr, si=buf_len */
+      size_t jlen = strlen(kAppListJson) + 1;
+      if (!di || !si) return jlen;
+      if (jlen > (u64)si) jlen = si;
+      if (CopyToUserWrite(m, di, (void *)kAppListJson, jlen))
+        return -1;
+      return jlen;
     }
     default:
       return -1;
