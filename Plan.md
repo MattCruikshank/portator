@@ -390,6 +390,35 @@ portator/
 4. Zip guest ELFs (and `package` tool) into the host binary
 5. For portator-dev: also zip cosmocc into the host binary
 
+## Progress
+
+### Completed
+
+1. **Forked Blink** — [github.com/MattCruikshank/blink](https://github.com/MattCruikshank/blink)
+2. **Built Blink with `fatcosmocc`** — Produces a fat APE binary (x86-64 + aarch64). Required these changes to the fork:
+   - `blink/machine.h` — Guard `libc/dce.h` include with `!defined(__COSMOCC__)`
+   - `blink/loader.c` — Guard `IsWindows()` macro for `cosmocc` builds
+   - `blink/cpuid.c` — Guard OS detection macro for `cosmocc` builds
+   - `build/rules.mk` — Disabled `.h.ok` header check targets (incompatible with `fatcosmocc`)
+   - `blink/clear_cache.c` — New file providing `__clear_cache` for aarch64
+3. **Created Portator `main.c`** — Minimal wrapper around blink's internals (`LoadProgram`, `Blink`, etc.), linking against `blink.a` and `zlib.a`. Provides `TerminateSignal` (required by `blink.a` but defined outside the archive in blink's own `blink.c`).
+4. **Created standalone `Makefile`** — Compiles `main.c` with `fatcosmocc`, links against blink's pre-built `blink.a` and `zlib.a`. Output goes to `bin/portator`.
+5. **Created `.gitignore`** — Ignores `bin/` and `blink/` directories.
+
+### Next Steps
+
+1. **Create a test ELF** — Compile a simple "hello world" with `cosmocc` to verify Portator can load and run a guest program. Blink does not ship pre-built ELFs.
+2. **Verify basic execution** — Run `bin/portator /path/to/hello` and confirm output.
+3. **Add custom syscall handlers** — Hook into blink's syscall dispatch to handle Portator-specific syscalls (0x7000–0x7005).
+4. **Build `libportator`** — The guest-side library providing `PortatorApp` class hierarchy and syscall wrappers.
+5. **Program discovery** — Implement `*/bin/` scanning and `/zip/bin/` lookup.
+
+### Notes
+
+- Binary size is ~1.8MB for the fat APE build. This is larger than expected (~200KB for single-arch blink). The fat binary contains both x86-64 and aarch64 code plus the APE loader. Stripping debug symbols and `MODE=tiny` did not reduce size. Needs further investigation.
+- `fatcosmocc --update` may be needed if the cosmocc installation is stale — saw build failures until this was run.
+- Blink's `.bin` test files (e.g. `third_party/games/basic.bin`) are raw boot sector binaries for blinkenlights, not ELFs — they cannot be used to test portator.
+
 ## Open Questions
 
 - **Frame streaming**: What encoding/protocol for streaming graphical framebuffers to the browser? Raw pixels over WebSocket is simplest. WebRTC would allow lower latency. Could also encode as JPEG/PNG per frame for bandwidth.

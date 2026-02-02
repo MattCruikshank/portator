@@ -1,0 +1,43 @@
+unset CC
+unset AR
+
+cd /home/mcruikshank/source/portator/blink
+CC=fatcosmocc AR=fatcosmoar ./configure
+make clean && make -j$(nproc)
+
+ls -al o/blink/blink*
+# yielded 1,834,324 bytes for o/blink/blink
+
+OTHER IDEAS:
+
+    cd /home/mcruikshank/source/portator/blink
+    CC=fatcosmocc AR=fatcosmoar ./configure MODE=tiny
+    make clean && make -j$(nproc)
+
+    # yielded 1,834,324 bytes for o/blink/blink
+
+    cd /home/mcruikshank/source/portator/blink
+    CC=fatcosmocc AR=fatcosmoar CFLAGS="-Os -fomit-frame-pointer -fcf-protection=none" ./configure MODE=tiny
+    make clean && make -j$(nproc)
+
+    # haven't tried yet.
+
+cd /home/mcruikshank/source/portator
+make
+
+LATEST:
+cd /home/mcruikshank/source/portator/blink
+CC=fatcosmocc AR=fatcosmoar make clean && CC=fatcosmocc AR=fatcosmoar make -j$(nproc) && make check
+
+All the failures:
+
+make -k check
+
+
+echo '#include <stdio.h>
+  int main() { printf("Hello from portator!\n"); return 0; }' > /tmp/hello.c
+
+cosmocc -static -fno-pie -no-pie -o /tmp/hello /tmp/hello.c
+
+/tmp/hello
+./o/blink/blink /tmp/hello
