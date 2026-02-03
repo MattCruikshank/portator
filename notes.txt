@@ -56,6 +56,9 @@ zipinfo -1 bin/portator
 
 ///////
 
+cd ~/source/portator/publish && rm -r *
+
 cd ~/source/portator/blink && make clean && make
 cd ~/source/portator && make
-cd publish && ./portator list
+cd ~/source/portator/publish && ./portator list
+cd ~/source/portator/publish && ./portator web

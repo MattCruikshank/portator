@@ -481,7 +481,7 @@ static int CmdWeb(int argc, char **argv) {
     Print(2, "portator: invalid port\n");
     return 1;
   }
-  if (WebServerStart(port, "wwwroot")) return 1;
+  if (WebServerStart(port, "/zip/wwwroot")) return 1;
   Print(1, "Press Enter to stop the server...\n");
   (void)getchar();
   WebServerStop();
