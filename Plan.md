@@ -577,6 +577,40 @@ Suggested layout in the zip:
   apps/snake/LICENSE
 
 
+### VFS Experiments
+
+We investigated using Blink's VFS layer to allow guest programs direct access to their bundled data from `/zip/apps/<name>/` without host-side extraction.
+
+**What we tried:**
+
+1. **Enabled Blink's VFS** — Changed `blink/config.h` from `#define DISABLE_VFS` to `// #define DISABLE_VFS`. This enables Blink's full virtual filesystem layer with mount support.
+
+2. **Set `FLAG_prefix` to cwd** — VfsInit() tries to create `/SystemRoot` for backup access to the host root. Without write access to `/`, this fails. Setting `FLAG_prefix` to the current working directory makes VFS use cwd as the root, avoiding permission issues.
+
+3. **Mounted `/app/` for local apps** — In `CmdRun`, we mount `<name>/zip/` to `/app/` via `VfsMount()`. This works! Local guest apps can read `/app/data/...` successfully.
+
+4. **Mounted `/zip/` globally** — Attempted `VfsMount("/zip", "/zip", "hostfs", 0, NULL)` so guests could access the host's APE zip store directly. **This hangs** — when the guest calls `fopen("/zip/...")`, it blocks indefinitely. The issue appears to be that cosmopolitan's `/zip/` is a virtual path, and mounting it as a hostfs directory creates problematic path resolution.
+
+5. **Bundled app binaries** — With VFS enabled, the Blink loader uses VFS to access executables. Since `/zip/` isn't mounted (due to the hang issue), bundled executables at `/zip/apps/<name>/bin/<name>` fail to load with ENOENT.
+
+**Current state:**
+
+- VFS is enabled in `blink/config.h`
+- `FLAG_prefix` is set to cwd before VfsInit()
+- Per-app mounts work: `VfsMount("<name>/zip", "/app", "hostfs")` succeeds for local apps
+- Global `/zip/` mount is not used (causes hangs)
+- Bundled apps (from `/zip/apps/`) don't load because the loader can't access `/zip/` through VFS
+
+**Options forward:**
+
+- **Option A**: Debug why mounting `/zip/` to `/zip/` hangs. May be a cosmopolitan/Blink interaction issue.
+- **Option B**: Add custom syscalls for guests to list/read files from their `/zip/apps/<name>/` data, bypassing VFS entirely.
+- **Option C**: Continue extracting data to disk (current approach for `license/data/`, `new/templates/`).
+
+**Test program:**
+
+`test_vfs/` contains a minimal test program that tries reading from various paths. It verifies that `/app/data/hello.txt` works when mounted, while `/zip/...` paths fail.
+
 ### Notes
 
 - Binary size is ~1.8MB for the fat APE build. This is larger than expected (~200KB for single-arch blink). The fat binary contains both x86-64 and aarch64 code plus the APE loader. Stripping debug symbols and `MODE=tiny` did not reduce size. Needs further investigation.

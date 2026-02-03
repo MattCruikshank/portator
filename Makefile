@@ -12,13 +12,27 @@ CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_DARWIN_C_SOURCE -D_DEFAULT_SOURCE \
 LDFLAGS = -pthread
 LDLIBS = -lrt -lm
 
-.PHONY: all clean
+# Guest apps to build (directories with <name>/<name>.c)
+APPS = snake list new license test_vfs
 
-all: bin/portator
+.PHONY: all clean clean-portator portator apps package publish
 
+# Default: build everything
+all: clean-portator portator apps package publish
+
+# Remove just the portator binary (keeps .o files)
+clean-portator:
+	rm -f bin/portator
+
+# Remove everything
+clean:
+	rm -rf bin
+
+# Create bin directory
 bin:
 	mkdir -p bin
 
+# Compile object files
 bin/portator.o: main.c web_server.h | bin
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
@@ -30,19 +44,47 @@ bin/civetweb.o: civetweb/civetweb.c civetweb/civetweb.h | bin
 
 OBJS = bin/portator.o bin/web_server.o bin/civetweb.o
 
-bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
-	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+# Link portator and add base resources to zip
+portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o bin/portator
 	zip -qr bin/portator wwwroot include src
+
+# Build all guest apps
+apps: portator
+	@for app in $(APPS); do \
+	  if [ -f "$$app/$$app.c" ]; then \
+	    echo "Building $$app..."; \
+	    ./bin/portator build $$app || exit 1; \
+	  fi; \
+	done
+
+# Package app binaries and data into the zip
+package:
 	@rm -rf bin/apps
 	@for f in */bin/*; do \
-	  name=$$(basename "$$f"); \
-	  mkdir -p "bin/apps/$$name/bin"; \
-	  cp "$$f" "bin/apps/$$name/bin/$$name"; \
+	  if [ -f "$$f" ]; then \
+	    name=$$(basename "$$f"); \
+	    mkdir -p "bin/apps/$$name/bin"; \
+	    cp "$$f" "bin/apps/$$name/bin/$$name"; \
+	  fi; \
 	done
-	@if [ -d new/templates ]; then cp -r new/templates bin/apps/new/; fi
-	@if [ -d license/data ]; then cp -r license/data bin/apps/license/; fi
+	@# Copy app data directories (<name>/zip/* -> apps/<name>/)
+	@for app in */; do \
+	  app=$${app%/}; \
+	  if [ -d "$$app/zip" ]; then \
+	    mkdir -p "bin/apps/$$app"; \
+	    cp -r "$$app/zip/"* "bin/apps/$$app/"; \
+	  fi; \
+	done
+	@# Copy legacy data paths for compatibility
+	@if [ -d new/templates ]; then mkdir -p bin/apps/new && cp -r new/templates bin/apps/new/; fi
+	@if [ -d license/data ]; then mkdir -p bin/apps/license && cp -r license/data bin/apps/license/; fi
 	@cd bin && zip -qr portator apps
 	@rm -rf bin/apps
+	@echo "Packaged apps into bin/portator"
 
-clean:
-	rm -rf bin
+# Copy binary to publish folder for clean testing
+publish: package
+	@mkdir -p publish
+	@cp bin/portator publish/
+	@echo "Published to publish/"

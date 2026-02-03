@@ -16,6 +16,7 @@
 #include <libgen.h>
 #include <dirent.h>
 
+#include "config.h"
 #include "blink/assert.h"
 #include "blink/bus.h"
 #include "blink/flag.h"
@@ -425,7 +426,9 @@ static void Print(int fd, const char *s) {
 
 static int CmdRun(int argc, char **argv) {
   char elfpath[PATH_MAX];
+  char appdata[PATH_MAX];
   const char *name;
+  int bundled = 0;
 
   if (argc < 3) {
     Print(2, "Usage: portator run <name> [args...]\n");
@@ -446,7 +449,21 @@ static int CmdRun(int argc, char **argv) {
       Print(2, "\n");
       return 127;
     }
+    bundled = 1;
   }
+
+  /* Mount app data directory so guest can access /app/ */
+#ifndef DISABLE_VFS
+  if (bundled) {
+    snprintf(appdata, sizeof(appdata), "/zip/apps/%s", name);
+  } else {
+    /* For local apps, use <name>/zip/ if it exists */
+    snprintf(appdata, sizeof(appdata), "%s/zip", name);
+  }
+  /* Create /app mount point and mount app data */
+  VfsMkdir(AT_FDCWD, "/app", 0755);
+  VfsMount(appdata, "/app", "hostfs", 0, NULL);
+#endif
 
   /* Rewrite argv so the guest sees: <name> [args...] */
   argv[2] = elfpath;
@@ -552,6 +569,13 @@ int main(int argc, char *argv[]) {
   }
 #endif
 #ifndef DISABLE_VFS
+  /* Use current directory as VFS prefix to avoid permission issues */
+  {
+    static char cwdbuf[PATH_MAX];
+    if (getcwd(cwdbuf, sizeof(cwdbuf))) {
+      FLAG_prefix = cwdbuf;
+    }
+  }
   if (VfsInit(FLAG_prefix)) {
     Print(2, "portator: vfs init failed\n");
     return 1;

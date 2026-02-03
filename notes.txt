@@ -54,3 +54,8 @@ List the contents of the zip:
 
 zipinfo -1 bin/portator
 
+///////
+
+cd ~/source/portator/blink && make clean && make
+cd ~/source/portator && make
+cd publish && ./portator list
