@@ -40,6 +40,7 @@ bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	  cp "$$f" "bin/apps/$$name/bin/$$name"; \
 	done
 	@if [ -d new/templates ]; then cp -r new/templates bin/apps/new/; fi
+	@if [ -d license/data ]; then cp -r license/data bin/apps/license/; fi
 	@cd bin && zip -qr portator apps
 	@rm -rf bin/apps
 

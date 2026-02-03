@@ -567,6 +567,22 @@ int main(int argc, char *argv[]) {
     return CmdRun(3, list_argv);
   }
   if (strcmp(argv[1], "license") == 0) {
+    /* Extract license data files from zip */
+    {
+      DIR *d;
+      struct dirent *ent;
+      d = opendir("/zip/apps/license/data");
+      if (d) {
+        while ((ent = readdir(d)) != NULL) {
+          if (ent->d_name[0] == '.') continue;
+          char relpath[PATH_MAX];
+          snprintf(relpath, sizeof(relpath),
+                   "apps/license/data/%s/LICENSE", ent->d_name);
+          ExtractFromZip(relpath);
+        }
+        closedir(d);
+      }
+    }
     char *lic_argv[] = { argv[0], (char *)"run", (char *)"license", NULL };
     return CmdRun(3, lic_argv);
   }

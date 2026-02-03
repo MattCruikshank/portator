@@ -542,6 +542,14 @@ portator/
 2. **Web server app launching** — `portator web` currently serves static files. It needs to launch guest apps in the browser: terminal (xterm.js/GhostTTY) for console apps, canvas for graphical apps, custom pages for web apps.
 3. **Scaffold `gui` and `web` templates** — `portator new gui` and `portator new web` currently produce stub files. Flesh out with working examples once syscall handlers and the web server are in place.
 4. **`libportator` guest library** — Decide whether to build a C++ class hierarchy (`PortatorConsoleApp`, `PortatorGraphicalApp`, `PortatorWebApp`) or stay with the current C + inline syscall approach. C++ would give cleaner structure for gui/web apps but adds complexity for console apps that don't need it.
+5. **Consolidate app data packaging** — Needs design work. Currently, app data (templates, license files, etc.) is handled ad-hoc: the host extracts specific paths from `/zip/` before launching guests, and the Makefile has special-case `cp -r` lines for each app's data. This should be unified:
+   - `portator new` should create a `zip/` folder inside the project directory. Any files placed in `<name>/zip/` are the app's bundled data.
+   - When `make` packages apps into the APE zip, it should automatically include `<name>/zip/*` under `apps/<name>/` (alongside `bin/`). For example, `license/zip/data/blink/LICENSE` becomes `apps/license/data/blink/LICENSE` in the zip.
+   - The host's `portator <cmd>` dispatch should have a generic mechanism to extract an app's data from `/zip/apps/<name>/` before running it, rather than per-command extraction logic.
+   - Guests read their data from `apps/<name>/` on local disk (extracted by the host) since they cannot access the host's `/zip/` filesystem directly.
+   - This means the current `license/data/` and `new/templates/` folders would move to `license/zip/data/` and `new/zip/templates/` respectively, making the convention explicit: "put your bundled data in `zip/`."
+   - The Makefile loop becomes: for each app, copy `<name>/bin/<name>` to `apps/<name>/bin/<name>`, and if `<name>/zip/` exists, copy its contents to `apps/<name>/`.
+   - This also solves the web app static assets question: a web app puts its `wwwroot/` inside `zip/`, and it gets bundled automatically.
 
 ### Notes
 
