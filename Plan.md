@@ -550,6 +550,32 @@ portator/
    - This means the current `license/data/` and `new/templates/` folders would move to `license/zip/data/` and `new/zip/templates/` respectively, making the convention explicit: "put your bundled data in `zip/`."
    - The Makefile loop becomes: for each app, copy `<name>/bin/<name>` to `apps/<name>/bin/<name>`, and if `<name>/zip/` exists, copy its contents to `apps/<name>/`.
    - This also solves the web app static assets question: a web app puts its `wwwroot/` inside `zip/`, and it gets bundled automatically.
+  
+Suggested layout in the zip:
+
+  apps/portator/bin/portator (DOES NOT EXIST, NOT A CLIENT PROGRAM)
+  apps/portator/data/wwwroot/*
+  apps/portator/LICENSE
+
+  apps/list/bin/list
+  apps/list/LICENSE
+
+  apps/license/bin/license
+  apps/license/LICENSE
+  apps/license/data/<library>/LICENSE (Put other licenses here)
+
+  apps/init/bin/init
+  apps/init/LICENSE
+  apps/init/data/include/*
+  apps/init/data/src/*
+
+  apps/new/bin/new
+  apps/new/LICENSE
+  apps/new/data/templates/console/__NAME__.c
+
+  apps/snake/bin/snake
+  apps/snake/LICENSE
+
 
 ### Notes
 

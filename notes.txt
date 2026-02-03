@@ -50,5 +50,7 @@ make && ./bin/portator /tmp/hello
 
 //////
 
+List the contents of the zip:
+
 zipinfo -1 bin/portator
 
