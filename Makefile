@@ -39,6 +39,7 @@ bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	  mkdir -p "bin/apps/$$name/bin"; \
 	  cp "$$f" "bin/apps/$$name/bin/$$name"; \
 	done
+	@if [ -d new/templates ]; then cp -r new/templates bin/apps/new/; fi
 	@cd bin && zip -qr portator apps
 	@rm -rf bin/apps
 

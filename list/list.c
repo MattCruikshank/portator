@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "portator.h"
-#include "cJSON.h"
+#include <cjson/cJSON.h>
 
 int main(void) {
     char ver[64];

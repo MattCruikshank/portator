@@ -54,14 +54,26 @@ static int ExtractFromZip(const char *relpath) {
   snprintf(zippath, sizeof(zippath), "/zip/%s", relpath);
   snprintf(outpath, sizeof(outpath), "./%s", relpath);
 
-  /* Create parent directories */
+  /* Create parent directories recursively */
   snprintf(parentdir, sizeof(parentdir), "%s", outpath);
   parent = dirname(parentdir);
-  if (mkdir(parent, 0755) && errno != EEXIST) {
-    Print(2, "portator: cannot create directory ");
-    Print(2, parent);
-    Print(2, "\n");
-    return -1;
+  {
+    char tmp[PATH_MAX];
+    char *p;
+    snprintf(tmp, sizeof(tmp), "%s", parent);
+    for (p = tmp + 1; *p; p++) {
+      if (*p == '/') {
+        *p = '\0';
+        mkdir(tmp, 0755);
+        *p = '/';
+      }
+    }
+    if (mkdir(tmp, 0755) && errno != EEXIST) {
+      Print(2, "portator: cannot create directory ");
+      Print(2, tmp);
+      Print(2, "\n");
+      return -1;
+    }
   }
 
   fin = fopen(zippath, "r");
@@ -90,8 +102,14 @@ static int ExtractFromZip(const char *relpath) {
 
 static const char *kSharedFiles[] = {
   "include/portator.h",
-  "include/cJSON.h",
+  "include/cjson/cJSON.h",
+  "include/mustach.h",
+  "include/mustach-wrap.h",
+  "include/mustach-cjson.h",
   "src/cJSON.c",
+  "src/mustach.c",
+  "src/mustach-wrap.c",
+  "src/mustach-cjson.c",
   NULL
 };
 
@@ -135,98 +153,6 @@ static int MakeDir(const char *path) {
     Print(2, "\n");
     return -1;
   }
-  return 0;
-}
-
-static int CmdNew(int argc, char **argv) {
-  char path[PATH_MAX];
-  char source[4096];
-  const char *type, *name;
-  int n;
-
-  if (argc < 4) {
-    Print(2, "Usage: portator new <type> <name>\n");
-    Print(2, "Types: console, gui, web\n");
-    return 1;
-  }
-  type = argv[2];
-  name = argv[3];
-
-  if (strcmp(type, "console") != 0 &&
-      strcmp(type, "gui") != 0 &&
-      strcmp(type, "web") != 0) {
-    Print(2, "portator: unknown type: ");
-    Print(2, type);
-    Print(2, "\nTypes: console, gui, web\n");
-    return 1;
-  }
-
-  /* Create directories */
-  if (MakeDir(name)) return 1;
-  snprintf(path, sizeof(path), "%s/bin", name);
-  if (MakeDir(path)) return 1;
-
-  /* Extract shared include/src if not present */
-  if (access("include", F_OK) || access("src", F_OK)) {
-    Print(1, "Extracting shared files...\n");
-    if (ExtractSharedFiles()) return 1;
-  }
-
-  /* Generate source file */
-  if (strcmp(type, "console") == 0) {
-    n = snprintf(source, sizeof(source),
-      "#include <stdio.h>\n"
-      "#include \"portator.h\"\n"
-      "\n"
-      "int main(void) {\n"
-      "    char ver[64];\n"
-      "    if (portator_version(ver, sizeof(ver)) > 0)\n"
-      "        printf(\"Running on %%s\\n\", ver);\n"
-      "    printf(\"Hello from %s!\\n\");\n"
-      "    return 0;\n"
-      "}\n", name);
-  } else if (strcmp(type, "gui") == 0) {
-    n = snprintf(source, sizeof(source),
-      "#include <string.h>\n"
-      "#include \"portator.h\"\n"
-      "\n"
-      "int main(void) {\n"
-      "    /* TODO: graphical app */\n"
-      "    return 0;\n"
-      "}\n");
-  } else {
-    n = snprintf(source, sizeof(source),
-      "#include <stdio.h>\n"
-      "#include \"portator.h\"\n"
-      "\n"
-      "int main(void) {\n"
-      "    /* TODO: web app */\n"
-      "    return 0;\n"
-      "}\n");
-  }
-
-  snprintf(path, sizeof(path), "%s/%s.c", name, name);
-  if (WriteFile(path, source, n)) return 1;
-
-  Print(1, "Created ");
-  Print(1, name);
-  Print(1, "/\n");
-  Print(1, "  ");
-  snprintf(path, sizeof(path), "%s/%s.c\n", name, name);
-  Print(1, path);
-  Print(1, "  ");
-  snprintf(path, sizeof(path), "%s/bin/\n", name);
-  Print(1, path);
-  Print(1, "\nBuild with:\n");
-  snprintf(path, sizeof(path),
-    "  portator build %s\n", name);
-  Print(1, path);
-  Print(1, "Run with:\n");
-  snprintf(path, sizeof(path),
-    "  portator run %s\n", name);
-  Print(1, path);
-  Print(1, "\nHint: Ensure -I./include is in your editor's include path\n");
-
   return 0;
 }
 
@@ -283,8 +209,14 @@ static int CmdBuild(int argc, char **argv) {
   if (pid == 0) {
     execlp("cosmocc", "cosmocc",
            "-static", "-fno-pie", "-no-pie",
-           "-I./include",
-           "-o", out, src, "./src/cJSON.c", (char *)NULL);
+           "-I./include", "-I./include/cjson",
+           "-DNO_OPEN_MEMSTREAM",
+           "-o", out, src,
+           "./src/cJSON.c",
+           "./src/mustach.c",
+           "./src/mustach-wrap.c",
+           "./src/mustach-cjson.c",
+           (char *)NULL);
     _exit(127);
   }
   if (waitpid(pid, &status, 0) < 0) {
@@ -573,9 +505,6 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "init") == 0) {
     return CmdInit(argc, argv);
   }
-  if (strcmp(argv[1], "new") == 0) {
-    return CmdNew(argc, argv);
-  }
   if (strcmp(argv[1], "build") == 0) {
     return CmdBuild(argc, argv);
   }
@@ -602,6 +531,39 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "list") == 0) {
     char *list_argv[] = { argv[0], (char *)"run", (char *)"list", NULL };
     return CmdRun(3, list_argv);
+  }
+  if (strcmp(argv[1], "new") == 0) {
+    /* Extract shared files + templates so the guest can read them */
+    if (access("include", F_OK) || access("src", F_OK)) {
+      Print(1, "Extracting shared files...\n");
+      if (ExtractSharedFiles()) return 1;
+    }
+    /* Extract templates from zip */
+    {
+      char zipdir[PATH_MAX];
+      DIR *d;
+      struct dirent *ent;
+      const char *type = argc >= 3 ? argv[2] : "console";
+      snprintf(zipdir, sizeof(zipdir), "/zip/apps/new/templates/%s", type);
+      d = opendir(zipdir);
+      if (d) {
+        while ((ent = readdir(d)) != NULL) {
+          if (ent->d_name[0] == '.') continue;
+          char relpath[PATH_MAX];
+          snprintf(relpath, sizeof(relpath),
+                   "apps/new/templates/%s/%s", type, ent->d_name);
+          ExtractFromZip(relpath);
+        }
+        closedir(d);
+      }
+    }
+    /* portator new <type> <name> -> run new <type> <name> */
+    char *new_argv[6] = { argv[0], (char *)"run", (char *)"new", NULL };
+    int new_argc = 3;
+    for (int i = 2; i < argc && new_argc < 5; i++)
+      new_argv[new_argc++] = argv[i];
+    new_argv[new_argc] = NULL;
+    return CmdRun(new_argc, new_argv);
   }
   if (!Commandv(argv[1], g_pathbuf, sizeof(g_pathbuf))) {
     Print(2, "portator: command not found: ");
