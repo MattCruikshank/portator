@@ -497,6 +497,7 @@ int main(int argc, char *argv[]) {
     Print(1, "    init                Extract shared include/src files\n");
     Print(1, "    web [port]          Start the web UI (default: 6711)\n");
     Print(1, "    credits             Show third-party credits\n");
+    Print(1, "    license             Show license information\n");
     Print(1, "    help                Show this message\n");
     Print(1, "\n");
     Print(1, "  https://portator.net\n");
@@ -526,6 +527,12 @@ int main(int argc, char *argv[]) {
     Print(1, "  CivetWeb         HTTP/WebSocket server (MIT license)\n");
     Print(1, "                   CivetWeb contributors\n");
     Print(1, "                   https://github.com/civetweb/civetweb\n");
+    Print(1, "\n");
+    Print(1, "  Built with the assistance of:\n");
+    Print(1, "\n");
+    Print(1, "  Claude Code      AI coding assistant\n");
+    Print(1, "                   Anthropic (Claude Opus 4.5)\n");
+    Print(1, "                   https://claude.ai/claude-code\n");
     Print(1, "\n");
     return 0;
   }
@@ -558,6 +565,10 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "list") == 0) {
     char *list_argv[] = { argv[0], (char *)"run", (char *)"list", NULL };
     return CmdRun(3, list_argv);
+  }
+  if (strcmp(argv[1], "license") == 0) {
+    char *lic_argv[] = { argv[0], (char *)"run", (char *)"license", NULL };
+    return CmdRun(3, lic_argv);
   }
   if (strcmp(argv[1], "new") == 0) {
     /* Extract shared files + templates so the guest can read them */
