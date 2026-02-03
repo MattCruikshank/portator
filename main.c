@@ -16,7 +16,7 @@
 #include <libgen.h>
 #include <dirent.h>
 
-#include "config.h"
+// #include "config.h" // VFS
 #include "blink/assert.h"
 #include "blink/bus.h"
 #include "blink/flag.h"
@@ -426,9 +426,9 @@ static void Print(int fd, const char *s) {
 
 static int CmdRun(int argc, char **argv) {
   char elfpath[PATH_MAX];
-  char appdata[PATH_MAX];
+  // char appdata[PATH_MAX];  // VFS
   const char *name;
-  int bundled = 0;
+  // int bundled = 0;  // VFS
 
   if (argc < 3) {
     Print(2, "Usage: portator run <name> [args...]\n");
@@ -449,21 +449,21 @@ static int CmdRun(int argc, char **argv) {
       Print(2, "\n");
       return 127;
     }
-    bundled = 1;
+    // bundled = 1;
   }
 
   /* Mount app data directory so guest can access /app/ */
-#ifndef DISABLE_VFS
-  if (bundled) {
-    snprintf(appdata, sizeof(appdata), "/zip/apps/%s", name);
-  } else {
-    /* For local apps, use <name>/zip/ if it exists */
-    snprintf(appdata, sizeof(appdata), "%s/zip", name);
-  }
-  /* Create /app mount point and mount app data */
-  VfsMkdir(AT_FDCWD, "/app", 0755);
-  VfsMount(appdata, "/app", "hostfs", 0, NULL);
-#endif
+// #ifndef DISABLE_VFS
+//   if (bundled) {
+//     snprintf(appdata, sizeof(appdata), "/zip/apps/%s", name);
+//   } else {
+//     /* For local apps, use <name>/zip/ if it exists */
+//     snprintf(appdata, sizeof(appdata), "%s/zip", name);
+//   }
+//   /* Create /app mount point and mount app data */
+//   VfsMkdir(AT_FDCWD, "/app", 0755);
+//   VfsMount(appdata, "/app", "hostfs", 0, NULL);
+// #endif
 
   /* Rewrite argv so the guest sees: <name> [args...] */
   argv[2] = elfpath;
@@ -569,17 +569,40 @@ int main(int argc, char *argv[]) {
   }
 #endif
 #ifndef DISABLE_VFS
-  /* Use current directory as VFS prefix to avoid permission issues */
-  {
-    static char cwdbuf[PATH_MAX];
-    if (getcwd(cwdbuf, sizeof(cwdbuf))) {
-      FLAG_prefix = cwdbuf;
-    }
-  }
+  // /* Use current directory as VFS prefix to avoid permission issues */
+  // {
+  //   static char cwdbuf[PATH_MAX];
+  //   if (getcwd(cwdbuf, sizeof(cwdbuf))) {
+  //     FLAG_prefix = cwdbuf;
+  //   }
+  // }
   if (VfsInit(FLAG_prefix)) {
     Print(2, "portator: vfs init failed\n");
     return 1;
   }
+  /* Mount zipfs at /zipfs so guests can access bundled content.
+   * We mount at /zipfs (not /zip) because:
+   * 1. The host's cosmopolitan /zip is a virtual path
+   * 2. hostfs.Traverse batch-processes paths, bypassing VFS mount checks
+   * 3. Using a unique mount point (/zipfs) avoids conflicts with hostfs
+   *
+   * Guests access bundled content via /zipfs/apps/<name>/... */
+  // {
+  //   struct stat st;
+  //   if (stat("/zip", &st) == 0) {
+  //     Print(1, "portator: host /zip exists, mounting zipfs at /zipfs\n");
+  //     VfsMkdir(AT_FDCWD, "/zipfs", 0755);
+  //     if (VfsMount("/zip", "/zipfs", "zipfs", 0, NULL) == -1) {
+  //       Print(2, "portator: VfsMount /zipfs failed: ");
+  //       Print(2, strerror(errno));
+  //       Print(2, "\n");
+  //     } else {
+  //       Print(1, "portator: zipfs mounted at /zipfs\n");
+  //     }
+  //   } else {
+  //     Print(1, "portator: host /zip not found, skipping zipfs mount\n");
+  //   }
+  // }
 #endif
   HandleSigs();
   InitBus();

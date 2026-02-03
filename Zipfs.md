@@ -389,6 +389,75 @@ If direct host access to `/zip/` is still problematic, an alternative is to cach
 
 This adds memory overhead but isolates zipfs from any `/zip/` access quirks during normal operation.
 
+## Open Questions
+
+### Architecture Questions
+
+1. **VfsTraverse vs VfsFinddir** - The document lists both as essential operations, but the code sample only shows `ZipfsFinddir`. Does `Traverse` need separate implementation, or does VFS core handle traversal by calling `Finddir` repeatedly?
+
+   **Answer:** Traverse is optional but recommended for performance. In `vfs.c:534-572`, the core VFS checks if `Traverse` is available and uses it; otherwise it falls back to calling `Finddir` repeatedly for each path component. hostfs implements `HostfsTraverse` for efficiency (batch-processing multiple components with `fstatat()`), while devfs leaves it NULL. For zipfs, we can start with just `Finddir` and add `Traverse` later if needed.
+
+2. **Reference counting** - I see `VfsAcquireInfo(parent)` being called. What's the corresponding release pattern? Is there a `VfsReleaseInfo()` that needs to be called somewhere, and does `VfsFreeInfo()` handle decrementing the parent's refcount?
+
+   **Answer:** Uses atomic refcounting. `VfsAcquireInfo()` increments via `atomic_fetch_add()`, and `VfsFreeInfo()` decrements via `atomic_fetch_sub()`. When refcount reaches 0, `VfsFreeInfo()` recursively calls `VfsFreeInfo(info->parent)` to decrement the parent's refcount, then calls the filesystem's `Freeinfo` op, then frees the node. No separate `VfsReleaseInfo()` exists—just call `VfsFreeInfo()`.
+
+3. **Thread safety** - Multiple guests could access zipfs concurrently. Does Blink's VFS layer handle locking, or does zipfs need its own mutex around directory streams and file descriptors?
+
+   **Answer:** VFS core provides a global mutex (`g_vfs.lock`) protecting device/system/fd/mount lists. Atomic operations protect VfsInfo refcounts. Individual filesystems can add their own mutexes if needed—procfs does this with per-open-file locks for concurrent read coordination. For zipfs, we should be fine relying on VFS core locking, since each open file/directory gets its own `ZipfsInfo` with its own fd/dirstream.
+
+### Implementation Questions
+
+4. **ZipfsClose** - The document shows `Open` storing `fd` in `ZipfsInfo`, but there's no `Close` implementation shown. Should `Close` just call `close(zinfo->fd)` and set it to -1, or is there additional cleanup needed?
+
+   **Answer:** Yes, that's the pattern. From `hostfs.c:734-745`:
+   ```c
+   int HostfsClose(struct VfsInfo *info) {
+       if (info == NULL) return efault();
+       hostinfo = (struct HostfsInfo *)info->data;
+       ret = close(hostinfo->filefd);
+       hostinfo->filefd = -1;
+       return ret;
+   }
+   ```
+   For `Closedir`, hostfs also calls `VfsFreeInfo(info)` after closing the dirstream.
+
+5. **ZipfsPread** - For `Pread`, should we use the host `pread()` syscall directly, or manually seek+read+restore position? The current design tracks `pos` separately which suggests manual management.
+
+   **Answer:** Use host `pread()` directly. From `hostfs.c:794-803`:
+   ```c
+   ssize_t HostfsPread(struct VfsInfo *info, void *buf, size_t size, off_t offset) {
+       if (info == NULL || buf == NULL) return efault();
+       hostinfo = (struct HostfsInfo *)info->data;
+       return pread(hostinfo->filefd, buf, size, offset);
+   }
+   ```
+   The `pos` field in `ZipfsInfo` is only needed for `Read()` (sequential reads). `Pread` ignores it.
+
+6. **Error handling** - Functions like `erofs()` and `ebadf()` are used - are these Blink macros that set `errno` and return -1, or do they return the negative error code directly (like `-EROFS`)?
+
+   **Answer:** They set `errno` and return -1. From `errno.c`:
+   ```c
+   static dontinline long ReturnErrno(int e) {
+       errno = e;
+       return -1;
+   }
+   long ebadf(void) { return ReturnErrno(EBADF); }
+   ```
+   **Note:** There is no `erofs()` function defined in Blink. We'll need to add it to `errno.c`:
+   ```c
+   long erofs(void) { return ReturnErrno(EROFS); }
+   ```
+
+### Practical Questions
+
+7. **The "cached directory tree" alternative** - You mention this as a fallback. Have you already tested whether direct `stat()`/`opendir()` on `/zip/...` paths works correctly from the host side? That would determine if the simpler direct-access approach is viable.
+
+   **Answer:** *Not yet answered—requires testing.*
+
+8. **Mount location** - The doc mounts at `/zip`, but the problem statement mentions guests needing `/zip/apps/<name>/...`. Is `/zip` the right mount point, or should this be more specific?
+
+   **Answer:** *Not yet answered—design decision needed.*
+
 ## Conclusion
 
 Zipfs provides a clean abstraction for exposing cosmopolitan's `/zip/` store to Blink guests. By implementing our own filesystem type, we control exactly how `/zip/` is accessed and avoid the hanging issues encountered with direct hostfs mounting.

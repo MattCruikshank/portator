@@ -535,6 +535,8 @@ portator/
 16. **`portator list`** — Guest program that calls the `list` syscall, parses the JSON with cJSON, and prints discovered program names. Works as both `portator list` and `portator run list`.
 17. **`portator help`** — Displays version, available commands, and website URL. Also shown when running `portator` with no arguments.
 18. **Snake game** — Console-based snake game running as a guest under Portator.
+19. **Zipfs filesystem** — Implemented `blink/blink/zipfs.c` and `zipfs.h`, a new VFS filesystem that wraps Cosmopolitan's `/zip/` virtual path. Mounted at `/zipfs` to avoid hostfs conflicts. Supports read-only file and directory operations.
+20. **`list` uses zipfs** — Converted the `list` guest app to read directly from `/zipfs/apps/` instead of using the host's `portator_list()` syscall. Demonstrates that guest programs can access bundled data through zipfs.
 
 ### Next Steps
 
@@ -577,39 +579,97 @@ Suggested layout in the zip:
   apps/snake/LICENSE
 
 
-### VFS Experiments
+### VFS and Zipfs Implementation
 
-We investigated using Blink's VFS layer to allow guest programs direct access to their bundled data from `/zip/apps/<name>/` without host-side extraction.
+We investigated using Blink's VFS layer to allow guest programs direct access to their bundled data without host-side extraction.
 
-**What we tried:**
+#### Phase 1: Initial VFS Experiments
 
-1. **Enabled Blink's VFS** — Changed `blink/config.h` from `#define DISABLE_VFS` to `// #define DISABLE_VFS`. This enables Blink's full virtual filesystem layer with mount support.
+1. **Enabled Blink's VFS** — Changed `blink/config.h` from `#define DISABLE_VFS` to `// #define DISABLE_VFS`.
 
-2. **Set `FLAG_prefix` to cwd** — VfsInit() tries to create `/SystemRoot` for backup access to the host root. Without write access to `/`, this fails. Setting `FLAG_prefix` to the current working directory makes VFS use cwd as the root, avoiding permission issues.
+2. **Set `FLAG_prefix` to cwd** — VfsInit() tries to create `/SystemRoot` for backup access to the host root. Setting `FLAG_prefix` to the current working directory avoids permission issues.
 
-3. **Mounted `/app/` for local apps** — In `CmdRun`, we mount `<name>/zip/` to `/app/` via `VfsMount()`. This works! Local guest apps can read `/app/data/...` successfully.
+3. **Mounted `/app/` for local apps** — In `CmdRun`, we mount `<name>/zip/` to `/app/` via `VfsMount()`. This works for local apps.
 
-4. **Mounted `/zip/` globally** — Attempted `VfsMount("/zip", "/zip", "hostfs", 0, NULL)` so guests could access the host's APE zip store directly. **This hangs** — when the guest calls `fopen("/zip/...")`, it blocks indefinitely. The issue appears to be that cosmopolitan's `/zip/` is a virtual path, and mounting it as a hostfs directory creates problematic path resolution.
+4. **Attempted hostfs mount of `/zip/`** — `VfsMount("/zip", "/zip", "hostfs", 0, NULL)` hangs because hostfs batch-processes paths, bypassing VFS mount checks. The path `/zip/foo/bar` gets sent to hostfs as a single string, and hostfs tries to access it on the real filesystem where `/zip` doesn't exist.
 
-5. **Bundled app binaries** — With VFS enabled, the Blink loader uses VFS to access executables. Since `/zip/` isn't mounted (due to the hang issue), bundled executables at `/zip/apps/<name>/bin/<name>` fail to load with ENOENT.
+#### Phase 2: Zipfs Implementation
 
-**Current state:**
+To solve the hostfs batch-processing issue, we implemented a new **zipfs** filesystem that properly integrates Cosmopolitan's `/zip/` virtual path with Blink's VFS.
 
-- VFS is enabled in `blink/config.h`
-- `FLAG_prefix` is set to cwd before VfsInit()
-- Per-app mounts work: `VfsMount("<name>/zip", "/app", "hostfs")` succeeds for local apps
-- Global `/zip/` mount is not used (causes hangs)
-- Bundled apps (from `/zip/apps/`) don't load because the loader can't access `/zip/` through VFS
+**Files created:**
+- `blink/blink/zipfs.h` — Header with ZipfsInfo struct and function declarations
+- `blink/blink/zipfs.c` — Full implementation (~700 lines)
+
+**Operations implemented:**
+- `ZipfsInit` — Mount initialization, validates source path exists
+- `ZipfsFinddir` — Component-by-component directory traversal (not batch)
+- `ZipfsOpen/ZipfsClose` — File open/close
+- `ZipfsRead/ZipfsReadv/ZipfsPread` — File reading
+- `ZipfsSeek` — File seeking
+- `ZipfsStat/ZipfsFstat` — File stat
+- `ZipfsAccess` — Access checking
+- `ZipfsOpendir/ZipfsReaddir/ZipfsRewinddir/ZipfsClosedir` — Directory enumeration
+- `ZipfsSeekdir/ZipfsTelldir` — Directory seeking (needed for getdents syscall)
+- `ZipfsReadlink` — Stub returning EINVAL (zipfs doesn't support symlinks)
+
+**Key design decisions:**
+- Mounted at `/zipfs` (not `/zip`) to avoid path conflicts with hostfs
+- Uses component-by-component `Finddir` traversal, not batch `Traverse`
+- Opens files via Cosmopolitan's `/zip/...` path, stores real kernel fd
+- Read-only filesystem (all write ops return EACCES)
+
+#### Current State
+
+**What works:**
+- Zipfs is registered and mounted at `/zipfs` on startup
+- Guest programs can read files from `/zipfs/apps/<name>/...`
+- The `list` guest app was converted to use zipfs — reads `/zipfs/apps/` directory directly
+- `test_vfs` confirms `/zipfs/apps/test_vfs/data/hello.txt` reads successfully
+
+**What doesn't work:**
+- Loading bundled app **binaries** through zipfs
+
+#### The Loader Problem
+
+The fundamental issue is the separation between HOST and GUEST:
+
+```
+HOST (main.c, loader.c)          GUEST (runs inside blink emulator)
+─────────────────────────        ─────────────────────────────────
+- Runs on real CPU               - Runs on emulated CPU
+- Uses Cosmopolitan APIs         - Syscalls intercepted by blink
+- Can access /zip directly       - Sees VFS mounts (/zipfs, /app)
+- Loads ELF before guest starts  - Cannot exist until ELF is loaded
+```
+
+When running a bundled app:
+1. `CmdRun` finds `/zip/apps/new/bin/new` exists (via host's `access()`)
+2. Calls `Exec()` → `LoadProgram()` to load the ELF
+3. `LoadProgram()` uses `VfsOpen()` and `Mmap()` to read the binary
+4. Problem: `VfsOpen("/zip/...")` goes through VFS → hostfs → fails (ENOENT)
+5. Even if we use `/zipfs/...`, the `Mmap()` call passes VFS fd to host mmap, which fails
+
+The loader runs on the HOST before any guest code executes. It cannot use `/zipfs` paths because:
+- VfsOpen returns a VFS-managed fd number
+- Host's mmap() needs a real kernel fd
+- For hostfs, the underlying kernel fd is usable; for zipfs, it's not exposed to the VFS fd layer
 
 **Options forward:**
 
-- **Option A**: Debug why mounting `/zip/` to `/zip/` hangs. May be a cosmopolitan/Blink interaction issue.
-- **Option B**: Add custom syscalls for guests to list/read files from their `/zip/apps/<name>/` data, bypassing VFS entirely.
-- **Option C**: Continue extracting data to disk (current approach for `license/data/`, `new/templates/`).
+- **Option A**: Modify the loader to not use VFS for `/zip` paths — use Cosmopolitan's open/mmap directly
+- **Option B**: Extract bundled binaries to a temp location before loading
+- **Option C**: Add a VfsMmap operation to zipfs that the loader can use
+- **Option D**: Keep current approach — host extracts data, guests read from relative paths via hostfs
 
 **Test program:**
 
-`test_vfs/` contains a minimal test program that tries reading from various paths. It verifies that `/app/data/hello.txt` works when mounted, while `/zip/...` paths fail.
+`test_vfs/` tests various paths. Current results:
+```
+/zipfs/apps/test_vfs/data/hello.txt  → SUCCESS (zipfs works for data)
+/app/data/hello.txt                   → SUCCESS (hostfs /app mount works)
+Relative paths                        → ENOENT (expected, no cwd mapping)
+```
 
 ### Notes
 

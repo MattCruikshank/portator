@@ -27,10 +27,10 @@ int main(void) {
     printf("\n=== VFS Access Test ===\n");
 
     /* Try various paths to see what the guest can access */
-    printf("\n-- Direct /zip/ paths (expect ENOENT) --\n");
-    try_read("/zip/apps/test_vfs/data/hello.txt");
-    try_read("/zip/test_vfs/data/hello.txt");
-    try_read("/zip/data/hello.txt");
+    printf("\n-- Direct /zipfs/ paths (should work with zipfs mount!) --\n");
+    try_read("/zipfs/apps/test_vfs/data/hello.txt");
+    try_read("/zipfs/test_vfs/data/hello.txt");
+    try_read("/zipfs/data/hello.txt");
 
     printf("\n-- Relative paths (expect ENOENT) --\n");
     try_read("apps/test_vfs/data/hello.txt");
