@@ -387,7 +387,7 @@ A fork of Blink with the following changes:
 
 ## Web Server
 
-Portator embeds [Mongoose](https://github.com/cesanta/mongoose) (vendored `mongoose.c`/`mongoose.h`) as its HTTP server. The `portator web` subcommand starts the server on port 6711 (overridable via `portator web <port>`).
+Portator embeds [CivetWeb](https://github.com/civetweb/civetweb) (vendored in `civetweb/`, MIT license) as its HTTP/WebSocket server. The `portator web` subcommand starts the server on port 6711 (overridable via `portator web <port>`).
 
 Static assets are embedded in the APE binary's zip store under `wwwroot/` and served from `/zip/wwwroot/`. This means `portator web` works as a self-contained binary with no external file dependencies.
 

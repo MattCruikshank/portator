@@ -496,9 +496,36 @@ int main(int argc, char *argv[]) {
     Print(1, "    list                List discovered programs\n");
     Print(1, "    init                Extract shared include/src files\n");
     Print(1, "    web [port]          Start the web UI (default: 6711)\n");
+    Print(1, "    credits             Show third-party credits\n");
     Print(1, "    help                Show this message\n");
     Print(1, "\n");
     Print(1, "  https://portator.net\n");
+    Print(1, "\n");
+    return 0;
+  }
+  if (strcmp(argv[1], "credits") == 0) {
+    Print(1, "\n");
+    Print(1, "  Portator " PORTATOR_VERSION " — Credits\n");
+    Print(1, "\n");
+    Print(1, "  Blink            x86-64 emulator (ISC license)\n");
+    Print(1, "                   Justine Tunney\n");
+    Print(1, "                   https://github.com/jart/blink\n");
+    Print(1, "\n");
+    Print(1, "  Cosmopolitan     portable C toolchain (ISC license)\n");
+    Print(1, "                   Justine Tunney\n");
+    Print(1, "                   https://github.com/jart/cosmopolitan\n");
+    Print(1, "\n");
+    Print(1, "  cJSON            JSON parser for C (MIT license)\n");
+    Print(1, "                   Dave Gamble\n");
+    Print(1, "                   https://github.com/DaveGamble/cJSON\n");
+    Print(1, "\n");
+    Print(1, "  mustach          Mustache templates for C (0BSD license)\n");
+    Print(1, "                   Jose Bollo\n");
+    Print(1, "                   https://gitlab.com/jobol/mustach\n");
+    Print(1, "\n");
+    Print(1, "  CivetWeb         HTTP/WebSocket server (MIT license)\n");
+    Print(1, "                   CivetWeb contributors\n");
+    Print(1, "                   https://github.com/civetweb/civetweb\n");
     Print(1, "\n");
     return 0;
   }

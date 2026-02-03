@@ -22,13 +22,13 @@ bin:
 bin/portator.o: main.c web_server.h | bin
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-bin/web_server.o: web_server.c web_server.h mongoose.h | bin
+bin/web_server.o: web_server.c web_server.h civetweb/civetweb.h | bin
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-bin/mongoose.o: mongoose.c mongoose.h | bin
-	$(CC) $(CFLAGS) $(CPPFLAGS) -DMG_ENABLE_LINES=0 -c -o $@ $<
+bin/civetweb.o: civetweb/civetweb.c civetweb/civetweb.h | bin
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DUSE_WEBSOCKET -DNO_SSL -DNO_CGI -c -o $@ $<
 
-OBJS = bin/portator.o bin/web_server.o bin/mongoose.o
+OBJS = bin/portator.o bin/web_server.o bin/civetweb.o
 
 bin/portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
