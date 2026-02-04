@@ -461,14 +461,8 @@ static int CmdRun(int argc, char **argv) {
 
   /* Mount /zip so guest can access bundled files */
 #ifndef DISABLE_VFS
-
-#define DOSPECIAL
-
-#ifndef DOSPECIAL
-  VfsMkdir(AT_FDCWD, "/zip", 0755);
-#endif
-  VfsMount("/zip", "/zip", "hostfs", 0, NULL);
-  LOGF("CmdRun: mounted /zip -> /zip");
+  VfsMountZip();
+  LOGF("CmdRun: mounted /zip");
 
   /* Mount app data directory so guest can access /app/ */
   if (bundled) {
