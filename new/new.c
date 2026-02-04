@@ -39,7 +39,9 @@ static char *read_file(const char *path, size_t *out_len) {
    apply mustache substitution and write to <name>/ */
 static int process_templates(const char *type, const char *name) {
     char tmpldir[4096];
-    snprintf(tmpldir, sizeof(tmpldir), "apps/new/templates/%s", type);
+    snprintf(tmpldir, sizeof(tmpldir), "zip/apps/new/templates/%s", type);
+
+    fprintf(stderr, "I %s(%d): tmpldir: %s\n", __FILE__, __LINE__, tmpldir);
 
     DIR *d = opendir(tmpldir);
     if (!d) {
@@ -49,18 +51,25 @@ static int process_templates(const char *type, const char *name) {
 
     cJSON *data = cJSON_CreateObject();
     cJSON_AddStringToObject(data, "name", name);
+    fprintf(stderr, "I %s(%d): name: %s\n", __FILE__, __LINE__, name);
 
     struct dirent *ent;
     while ((ent = readdir(d)) != NULL) {
         if (ent->d_name[0] == '.') continue;
 
+        fprintf(stderr, "I %s(%d): ent->d_name: %s\n", __FILE__, __LINE__, ent->d_name);
+
         char srcpath[4096];
         snprintf(srcpath, sizeof(srcpath), "%s/%s", tmpldir, ent->d_name);
+
+        fprintf(stderr, "I %s(%d): srcpath: %s\n", __FILE__, __LINE__, srcpath);
 
         /* Read template */
         size_t tmpl_len;
         char *tmpl = read_file(srcpath, &tmpl_len);
         if (!tmpl) continue;
+
+        fprintf(stderr, "I %s(%d): tmpl: \n=====\n%s\n=====\n", __FILE__, __LINE__, tmpl);
 
         /* Determine output filename: replace __NAME__ with project name */
         char outname[256];
@@ -72,6 +81,7 @@ static int process_templates(const char *type, const char *name) {
         } else {
             snprintf(outname, sizeof(outname), "%s", ent->d_name);
         }
+        fprintf(stderr, "I %s(%d): outname: %s\n", __FILE__, __LINE__, outname);
 
         /* Render template with mustache */
         char *result = NULL;
@@ -79,10 +89,14 @@ static int process_templates(const char *type, const char *name) {
         int rc = mustach_cJSON_mem(tmpl, tmpl_len, data, 0, &result, &result_len);
         free(tmpl);
 
+        fprintf(stderr, "I %s(%d): rc: %d\n", __FILE__, __LINE__, rc);
+
         if (rc != MUSTACH_OK || !result) {
             fprintf(stderr, "new: template error in %s\n", ent->d_name);
             continue;
         }
+
+        fprintf(stderr, "I %s(%d): result: \n=====\n%s\n=====\n", __FILE__, __LINE__, result);
 
         /* Write output */
         char outpath[4096];

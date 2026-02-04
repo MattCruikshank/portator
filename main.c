@@ -193,10 +193,10 @@ static int CmdBuild(int argc, char **argv) {
   }
 
   /* Extract shared files if needed */
-  // if (access("include", F_OK) || access("src", F_OK)) {
-  //   Print(1, "Extracting shared files...\n");
-  //   if (ExtractSharedFiles()) return 1;
-  // }
+  if (access("include", F_OK) || access("src", F_OK)) {
+    Print(1, "Extracting shared files...\n");
+    if (ExtractSharedFiles()) return 1;
+  }
 
   Print(1, "Building ");
   Print(1, name);
@@ -463,6 +463,9 @@ static int CmdRun(int argc, char **argv) {
 #ifndef DISABLE_VFS
   VfsMountZip();
   LOGF("CmdRun: mounted /zip");
+
+  /* Ensure /tmp exists so guest tmpfile() works (mustach needs it) */
+  VfsMkdir(AT_FDCWD, "/tmp", 0755);
 
   /* Mount app data directory so guest can access /app/ */
   if (bundled) {
