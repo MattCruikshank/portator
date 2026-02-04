@@ -58,7 +58,106 @@ zipinfo -1 bin/portator
 
 cd ~/source/portator/publish && rm -r *
 
-cd ~/source/portator/blink && make clean && make
+cd ~/source/portator/blink && make clean && make -j4
 cd ~/source/portator && make
 cd ~/source/portator/publish && ./portator list
 cd ~/source/portator/publish && ./portator web
+
+
+/// Feb 6...
+
+> Read Claude.md and Zipfs.md.
+> I was trying to make zipfs, but the code failed.
+> I then discovered that from the publish folder, I can't run programs:
+
+cd ~/source/portator/publish && ./portator list
+I2026-02-03T15:52:33.583177:blink/vfs.c:200:0 Initializing VFS
+/zip/apps/list/bin/list: failed to load executable (errno 2)
+
+I can run them from the local file system:
+
+./bin/portator list
+I2026-02-03T15:53:24.783171:blink/vfs.c:200:0 Initializing VFS
+I2026-02-03T15:53:24.783405:blink/loader.c:346:96972 blink believes list/bin/list is an x86_64-linux executable
+Running on Portator 0.1.0
+  new_hello
+  list
+  license
+  test_vfs
+  new
+  snake
+
+portator appears to be able to read and launch binaries from the local file system.
+And it can also extract files from its own zip:
+
+mcruikshank@debianvm:~/source/portator/publish$ ./portator init
+Extracting shared files...
+  include/portator.h
+  include/cjson/cJSON.h
+  include/mustach.h
+  include/mustach-wrap.h
+  include/mustach-cjson.h
+  src/cJSON.c
+  src/mustach.c
+  src/mustach-wrap.c
+  src/mustach-cjson.c
+Done.
+mcruikshank@debianvm:~/source/portator/publish$ ls
+include  portator  src
+
+But when I have portator try to run a program from the zip, it fails:
+
+./portator run list
+I2026-02-03T15:56:32.461182:blink/vfs.c:200:0 Initializing VFS
+/zip/apps/list/bin/list: failed to load executable (errno 2)
+
+
+
+portator appears to be able to read and launch binaries from the local file system.  And it can also extract files from its own zip.  But when I have portator try to run a program from the zip, it fails.  Please add debugging statements to assess what's failing.
+
+
+/////////////////////////////
+
+I've done a lot of work and added much debugging info.  What is the intention of hostfs.c HostfsTraverse?  What's it really
+  doing?  It fails at line 447: fstatat(-100, "/home/mcruikshank/source/portator/publish/zip", 0x7fff72f49730,
+  AT_SYMLINK_NOFOLLOW).  And yes, I'm trying to NOT do VfsMkdir(AT_FDCWD, "/zip", 0755);  I don't think "/zip" should have to
+  actually exist in the host file system.  Because this is an APE, and the APE has "/zip" available.  Ask questions if you need
+  to.
+
+● Read 1 file (ctrl+o to expand)
+
+● Now I see the problem. HostfsTraverse builds a host filesystem path and calls fstatat() on it. When the VFS root is prefix-mounted
+  to /home/mcruikshank/source/portator/publish, the path /zip becomes /home/mcruikshank/source/portator/publish/zip — which doesn't
+  exist on disk.
+
+  The VfsMkdir creates a virtual directory node in the VFS tree so the traversal can find /zip as a mount point before hostfs tries
+  to stat it on disk. Let me check how VfsMount and VfsTraverseMount interact.
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Here's what's happening:
+
+  HostfsTraverse is the hostfs "fast path" for directory traversal. Instead of resolving path components one-by-one through the VFS
+  layer (which checks mounts at each step), it greedily resolves the entire remaining path against the host filesystem using
+  fstatat() calls. This is efficient when everything lives on one hostfs mount, but it means it never gives VfsTraverseStackBuild a
+  chance to check for VFS mount points along the way.
+
+  The flow for /zip/apps/list/bin/list:
+
+  1. VfsTraverseStackBuild starts at root (hostfs, source = prefix)
+  2. Calls VfsTraverseMount — no mount at root level, stays on hostfs
+  3. Calls HostfsTraverse with the full path /zip/apps/list/bin/
+  4. HostfsTraverse builds host path: prefix + "zip" → fstatat(-100, ".../publish/zip", ...)
+  5. Fails — and since original == *dir (we haven't moved), it returns ENOENT directly
+  6. VfsTraverseStackBuild never gets a second loop iteration to check if /zip is a mount point
+
+  For /dev and /proc, VfsMkdir creates a physical directory in the prefix, so the fstatat succeeds, HostfsTraverse creates a VFS
+  node, and then VfsTraverseMount catches the mount overlay on the next iteration.
+
+  So the issue isn't VfsMount — it's that HostfsTraverse needs to yield back to VfsTraverseStackBuild when fstatat fails, so the VFS
+  layer can check for mounts. The check at line 451 (original != *dir) only handles the case where we've already moved via ... It
+  doesn't handle "this component might be a VFS mount point."
+
+  Would you like me to fix HostfsTraverse to yield on ENOENT regardless (or check for known mount points), rather than requiring the
+  physical directory?
+

@@ -18,7 +18,7 @@ int main(void) {
     if (portator_version(ver, sizeof(ver)) > 0)
         printf("%s — Licenses\n\n", ver);
 
-    const char *datadir = "apps/license/data";
+    const char *datadir = "zip/apps/license/data";
     DIR *d = opendir(datadir);
     if (!d) {
         fprintf(stderr, "license: cannot open %s\n", datadir);
