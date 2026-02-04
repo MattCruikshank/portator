@@ -193,10 +193,10 @@ static int CmdBuild(int argc, char **argv) {
   }
 
   /* Extract shared files if needed */
-  if (access("include", F_OK) || access("src", F_OK)) {
-    Print(1, "Extracting shared files...\n");
-    if (ExtractSharedFiles()) return 1;
-  }
+  // if (access("include", F_OK) || access("src", F_OK)) {
+  //   Print(1, "Extracting shared files...\n");
+  //   if (ExtractSharedFiles()) return 1;
+  // }
 
   Print(1, "Building ");
   Print(1, name);
@@ -438,9 +438,13 @@ static int CmdRun(int argc, char **argv) {
 
   /* Try local first, then bundled */
   snprintf(elfpath, sizeof(elfpath), "%s/bin/%s", name, name);
+  LOGF("CmdRun: trying local path '%s'", elfpath);
   if (access(elfpath, F_OK)) {
+    LOGF("CmdRun: local access failed (errno %d), trying bundled", errno);
     snprintf(elfpath, sizeof(elfpath), "/zip/apps/%s/bin/%s", name, name);
+    LOGF("CmdRun: trying bundled path '%s'", elfpath);
     if (access(elfpath, F_OK)) {
+      LOGF("CmdRun: bundled access failed (errno %d)", errno);
       Print(2, "portator: program not found: ");
       Print(2, name);
       Print(2, "\n");
@@ -449,22 +453,31 @@ static int CmdRun(int argc, char **argv) {
       Print(2, "\n");
       return 127;
     }
-    // bundled = 1;
+    LOGF("CmdRun: bundled access succeeded");
+    bundled = 1;
+  } else {
+    LOGF("CmdRun: local access succeeded");
   }
 
-  /* Mount app data directory so guest can access /app/ */
-// #ifndef DISABLE_VFS
-//   if (bundled) {
-//     snprintf(appdata, sizeof(appdata), "/zip/apps/%s", name);
-//   } else {
-//     /* For local apps, use <name>/zip/ if it exists */
-//     snprintf(appdata, sizeof(appdata), "%s/zip", name);
-//   }
-//   /* Create /app mount point and mount app data */
-//   VfsMkdir(AT_FDCWD, "/app", 0755);
-//   VfsMount(appdata, "/app", "hostfs", 0, NULL);
-// #endif
+  /* Mount /zip so guest can access bundled files */
+#ifndef DISABLE_VFS
+  VfsMountZip();
+  LOGF("CmdRun: mounted /zip");
 
+  /* Mount app data directory so guest can access /app/ */
+  if (bundled) {
+    snprintf(appdata, sizeof(appdata), "/zip/apps/%s", name);
+  } else {
+    /* For local apps, use <name>/zip/ if it exists */
+    snprintf(appdata, sizeof(appdata), "%s/zip", name);
+  }
+  // LOGF("CmdRun: mounting '%s' at /app", appdata);
+  // /* Create /app mount point and mount app data */
+  // VfsMkdir(AT_FDCWD, "/app", 0755);
+  // VfsMount(appdata, "/app", "hostfs", 0, NULL);
+#endif
+
+  LOGF("CmdRun: executing '%s' (bundled=%d)", elfpath, bundled);
   /* Rewrite argv so the guest sees: <name> [args...] */
   argv[2] = elfpath;
   return Exec(elfpath, elfpath, argv + 2, environ);
@@ -615,49 +628,49 @@ int main(int argc, char *argv[]) {
   }
   if (strcmp(argv[1], "license") == 0) {
     /* Extract license data files from zip */
-    {
-      DIR *d;
-      struct dirent *ent;
-      d = opendir("/zip/apps/license/data");
-      if (d) {
-        while ((ent = readdir(d)) != NULL) {
-          if (ent->d_name[0] == '.') continue;
-          char relpath[PATH_MAX];
-          snprintf(relpath, sizeof(relpath),
-                   "apps/license/data/%s/LICENSE", ent->d_name);
-          ExtractFromZip(relpath);
-        }
-        closedir(d);
-      }
-    }
+    // {
+    //   DIR *d;
+    //   struct dirent *ent;
+    //   d = opendir("/zip/apps/license/data");
+    //   if (d) {
+    //     while ((ent = readdir(d)) != NULL) {
+    //       if (ent->d_name[0] == '.') continue;
+    //       char relpath[PATH_MAX];
+    //       snprintf(relpath, sizeof(relpath),
+    //                "apps/license/data/%s/LICENSE", ent->d_name);
+    //       ExtractFromZip(relpath);
+    //     }
+    //     closedir(d);
+    //   }
+    // }
     char *lic_argv[] = { argv[0], (char *)"run", (char *)"license", NULL };
     return CmdRun(3, lic_argv);
   }
   if (strcmp(argv[1], "new") == 0) {
-    /* Extract shared files + templates so the guest can read them */
-    if (access("include", F_OK) || access("src", F_OK)) {
-      Print(1, "Extracting shared files...\n");
-      if (ExtractSharedFiles()) return 1;
-    }
-    /* Extract templates from zip */
-    {
-      char zipdir[PATH_MAX];
-      DIR *d;
-      struct dirent *ent;
-      const char *type = argc >= 3 ? argv[2] : "console";
-      snprintf(zipdir, sizeof(zipdir), "/zip/apps/new/templates/%s", type);
-      d = opendir(zipdir);
-      if (d) {
-        while ((ent = readdir(d)) != NULL) {
-          if (ent->d_name[0] == '.') continue;
-          char relpath[PATH_MAX];
-          snprintf(relpath, sizeof(relpath),
-                   "apps/new/templates/%s/%s", type, ent->d_name);
-          ExtractFromZip(relpath);
-        }
-        closedir(d);
-      }
-    }
+    // /* Extract shared files + templates so the guest can read them */
+    // if (access("include", F_OK) || access("src", F_OK)) {
+    //   Print(1, "Extracting shared files...\n");
+    //   if (ExtractSharedFiles()) return 1;
+    // }
+    // /* Extract templates from zip */
+    // {
+    //   char zipdir[PATH_MAX];
+    //   DIR *d;
+    //   struct dirent *ent;
+    //   const char *type = argc >= 3 ? argv[2] : "console";
+    //   snprintf(zipdir, sizeof(zipdir), "/zip/apps/new/templates/%s", type);
+    //   d = opendir(zipdir);
+    //   if (d) {
+    //     while ((ent = readdir(d)) != NULL) {
+    //       if (ent->d_name[0] == '.') continue;
+    //       char relpath[PATH_MAX];
+    //       snprintf(relpath, sizeof(relpath),
+    //                "apps/new/templates/%s/%s", type, ent->d_name);
+    //       ExtractFromZip(relpath);
+    //     }
+    //     closedir(d);
+    //   }
+    // }
     /* portator new <type> <name> -> run new <type> <name> */
     char *new_argv[6] = { argv[0], (char *)"run", (char *)"new", NULL };
     int new_argc = 3;
