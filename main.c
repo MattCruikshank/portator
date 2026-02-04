@@ -426,9 +426,9 @@ static void Print(int fd, const char *s) {
 
 static int CmdRun(int argc, char **argv) {
   char elfpath[PATH_MAX];
-  // char appdata[PATH_MAX];  // VFS
+  char appdata[PATH_MAX];  // VFS
   const char *name;
-  // int bundled = 0;  // VFS
+  int bundled = 0;  // VFS
 
   if (argc < 3) {
     Print(2, "Usage: portator run <name> [args...]\n");
