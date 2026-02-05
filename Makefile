@@ -13,7 +13,7 @@ LDFLAGS = -pthread
 LDLIBS = -lrt -lm
 
 # Guest apps to build (directories with <name>/<name>.c)
-APPS = snake list new license
+APPS = snake list new license mojozork
 
 .PHONY: all clean clean-portator portator apps package publish
 
@@ -78,6 +78,7 @@ package:
 	done
 	@# Copy legacy data paths for compatibility
 	@if [ -d new/templates ]; then mkdir -p bin/apps/new && cp -r new/templates bin/apps/new/; fi
+	@if [ -d mojozork/data ]; then mkdir -p bin/apps/mojozork && cp -r mojozork/data bin/apps/mojozork/; fi
 	@if [ -d license/data ]; then mkdir -p bin/apps/license && cp -r license/data bin/apps/license/; fi
 	@cd bin && zip -qr portator apps
 	@rm -rf bin/apps

@@ -533,6 +533,7 @@ static int CmdWeb(int argc, char **argv) {
 }
 
 int main(int argc, char *argv[]) {
+  // TODO: Are we supposed to store OnPortatorSyscall, and pass on to it if we don't handle the Syscall???
   OnPortatorSyscall = HandlePortatorSyscall;
   SetupWeb();
   GetStartDir();
@@ -561,6 +562,8 @@ int main(int argc, char *argv[]) {
     Print(1, "    license             Show license information\n");
     Print(1, "    help                Show this message\n");
     Print(1, "\n");
+    Print(1, "./portator run mojozork zip/apps/mojozork/data/zork1.dat\n");
+    Print(1, "\n");
     Print(1, "  https://portator.net\n");
     Print(1, "\n");
     return 0;
@@ -588,6 +591,11 @@ int main(int argc, char *argv[]) {
     Print(1, "  CivetWeb         HTTP/WebSocket server (MIT license)\n");
     Print(1, "                   CivetWeb contributors\n");
     Print(1, "                   https://github.com/civetweb/civetweb\n");
+    Print(1, "\n");
+    Print(1, "  MojoZork         A simple Z-Machine implementation in a single C file.\n");
+    Print(1, "                   Ryan C. Gordon\n");
+    Print(1, "                   https://www.patreon.com/posts/54997062\n");
+    Print(1, "                   https://github.com/icculus/mojozork\n");
     Print(1, "\n");
     Print(1, "  Built with the assistance of:\n");
     Print(1, "\n");
