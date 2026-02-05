@@ -1,5 +1,6 @@
 /*─────────────────────────────────────────────────────────────────────────────╗
-│ Portator — In-Process Emulated App Platform                                  │
+│ Portator — Actually Portable Executable ELF Emulator with embedded apps      │
+│ Portator (ISC license) by Matt Cruikshank                                    │
 │ A modified fork of Blink (ISC license) by Justine Tunney                     │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
@@ -101,6 +102,7 @@ static int ExtractFromZip(const char *relpath) {
   return 0;
 }
 
+// TODO: Port to an app, make it dynamic
 static const char *kSharedFiles[] = {
   "include/portator.h",
   "include/cjson/cJSON.h",
@@ -114,6 +116,7 @@ static const char *kSharedFiles[] = {
   NULL
 };
 
+// TODO: Port to an app
 static int ExtractSharedFiles(void) {
   int i;
   for (i = 0; kSharedFiles[i]; i++) {
@@ -607,50 +610,10 @@ int main(int argc, char *argv[]) {
     return CmdRun(3, list_argv);
   }
   if (strcmp(argv[1], "license") == 0) {
-    /* Extract license data files from zip */
-    // {
-    //   DIR *d;
-    //   struct dirent *ent;
-    //   d = opendir("/zip/apps/license/data");
-    //   if (d) {
-    //     while ((ent = readdir(d)) != NULL) {
-    //       if (ent->d_name[0] == '.') continue;
-    //       char relpath[PATH_MAX];
-    //       snprintf(relpath, sizeof(relpath),
-    //                "apps/license/data/%s/LICENSE", ent->d_name);
-    //       ExtractFromZip(relpath);
-    //     }
-    //     closedir(d);
-    //   }
-    // }
     char *lic_argv[] = { argv[0], (char *)"run", (char *)"license", NULL };
     return CmdRun(3, lic_argv);
   }
   if (strcmp(argv[1], "new") == 0) {
-    // /* Extract shared files + templates so the guest can read them */
-    // if (access("include", F_OK) || access("src", F_OK)) {
-    //   Print(1, "Extracting shared files...\n");
-    //   if (ExtractSharedFiles()) return 1;
-    // }
-    // /* Extract templates from zip */
-    // {
-    //   char zipdir[PATH_MAX];
-    //   DIR *d;
-    //   struct dirent *ent;
-    //   const char *type = argc >= 3 ? argv[2] : "console";
-    //   snprintf(zipdir, sizeof(zipdir), "/zip/apps/new/templates/%s", type);
-    //   d = opendir(zipdir);
-    //   if (d) {
-    //     while ((ent = readdir(d)) != NULL) {
-    //       if (ent->d_name[0] == '.') continue;
-    //       char relpath[PATH_MAX];
-    //       snprintf(relpath, sizeof(relpath),
-    //                "apps/new/templates/%s/%s", type, ent->d_name);
-    //       ExtractFromZip(relpath);
-    //     }
-    //     closedir(d);
-    //   }
-    // }
     /* portator new <type> <name> -> run new <type> <name> */
     char *new_argv[6] = { argv[0], (char *)"run", (char *)"new", NULL };
     int new_argc = 3;

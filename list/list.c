@@ -20,6 +20,8 @@ int main(void) {
         return 1;
     }
 
+    // TODO: Rewrite this to do its own scanning without the syscall
+
     if (portator_list(buf, n) <= 0) {
         printf("Failed to get app list\n");
         free(buf);

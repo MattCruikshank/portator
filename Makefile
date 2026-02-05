@@ -13,7 +13,7 @@ LDFLAGS = -pthread
 LDLIBS = -lrt -lm
 
 # Guest apps to build (directories with <name>/<name>.c)
-APPS = snake list new license test_vfs
+APPS = snake list new license
 
 .PHONY: all clean clean-portator portator apps package publish
 
