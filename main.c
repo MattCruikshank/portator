@@ -427,7 +427,7 @@ static void Print(int fd, const char *s) {
   (void)!write(fd, s, strlen(s));
 }
 
-static int CmdRun(int argc, char **argv) {
+static int CmdRunForked(int argc, char **argv) {
   char elfpath[PATH_MAX];
   char appdata[PATH_MAX];
   const char *name;
@@ -487,6 +487,31 @@ static int CmdRun(int argc, char **argv) {
   /* Rewrite argv so the guest sees: <name> [args...] */
   argv[2] = elfpath;
   return Exec(elfpath, elfpath, argv + 2, environ);
+}
+
+static int CmdRun(int argc, char **argv) {
+  pid_t pid;
+  int status;
+
+  pid = fork();
+  if (pid < 0) {
+    Print(2, "portator: fork failed\n");
+    return 1;
+  }
+  if (pid == 0) {
+    CmdRunForked(argc, argv);
+    _exit(127);
+  }
+  if (waitpid(pid, &status, 0) < 0) {
+    Print(2, "portator: waitpid failed\n");
+    return 1;
+  }
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    Print(2, "portator: build failed\n");
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+  }
+
+  return 0;
 }
 
 /*─────────────────────────────────────────────────────────────────────────────╗
