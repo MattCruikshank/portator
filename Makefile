@@ -1,5 +1,5 @@
-CC = fatcosmocc
-AR = fatcosmoar
+CC = cosmocc
+AR = cosmoar
 BLINK_DIR = blink
 
 # Blink's default mode uses o// (empty MODE)
@@ -47,7 +47,9 @@ OBJS = bin/portator.o bin/web_server.o bin/civetweb.o
 # Link portator and add base resources to zip
 portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o bin/portator
-	zip -qr bin/portator wwwroot include src
+	mv bin/portator bin/portator.zip
+	zip -qr bin/portator.zip wwwroot include src
+	mv bin/portator.zip bin/portator
 
 # Build all guest apps
 apps: portator
@@ -80,7 +82,7 @@ package:
 	@if [ -d new/templates ]; then mkdir -p bin/apps/new && cp -r new/templates bin/apps/new/; fi
 	@if [ -d mojozork/data ]; then mkdir -p bin/apps/mojozork && cp -r mojozork/data bin/apps/mojozork/; fi
 	@if [ -d license/data ]; then mkdir -p bin/apps/license && cp -r license/data bin/apps/license/; fi
-	@cd bin && zip -qr portator apps
+	@cd bin && mv portator portator.zip && zip -qr portator.zip apps && mv portator.zip portator
 	@rm -rf bin/apps
 	@echo "Packaged apps into bin/portator"
 

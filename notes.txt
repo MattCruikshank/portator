@@ -36,6 +36,7 @@ make -k check
 List the contents of the zip:
 
 zipinfo -1 bin/portator
+zipinfo -1 ./portator
 
 ///////
 
