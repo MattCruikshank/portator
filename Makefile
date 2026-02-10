@@ -15,6 +15,9 @@ LDLIBS = -lrt -lm
 # Guest apps to build (directories with <name>/<name>.c)
 APPS = snake list new license mojozork
 
+# Go guest apps (directories with <name>/<name>.go)
+GO_APPS = hello-go
+
 .PHONY: all clean clean-portator portator apps package publish
 
 # Default: build everything
@@ -57,6 +60,13 @@ apps: portator
 	  if [ -f "$$app/$$app.c" ]; then \
 	    echo "Building $$app..."; \
 	    ./bin/portator build $$app || exit 1; \
+	  fi; \
+	done
+	@for app in $(GO_APPS); do \
+	  if [ -f "$$app/$$app.go" ]; then \
+	    echo "Building $$app (Go)..."; \
+	    mkdir -p "$$app/bin"; \
+	    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$$app/bin/$$app" "./$$app/$$app.go" || exit 1; \
 	  fi; \
 	done
 
