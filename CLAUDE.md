@@ -11,7 +11,7 @@ Portator is an in-process x86-64 emulator platform built on a fork of [Blink](ht
 ### Full rebuild (Blink + Portator + guests)
 ```bash
 # From repo root:
-cd blink && make clean && ./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit && make CC=cosmocc AR=cosmoar -j4
+cd blink && make clean && CFLAGS="-g -O2 -Wno-cast-align" ./configure CC=cosmocc AR=cosmoar --enable-vfs && make CC=cosmocc AR=cosmoar -j4
 cd .. && make
 ```
 

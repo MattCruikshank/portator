@@ -554,7 +554,7 @@ int main(int argc, char *argv[]) {
   g_blink_path = argc > 0 ? argv[0] : 0;
   WriteErrorInit();
   LogInit("/tmp/portator.log");
-  FLAG_strace = true;
+  // FLAG_strace = true;
   InitMap();
   if (argc < 2 || strcmp(argv[1], "help") == 0) {
     Print(1, "\n");

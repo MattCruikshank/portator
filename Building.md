@@ -81,7 +81,7 @@ Blink is an x86-64 emulator that lives in the `blink/` submodule. It needs to be
 
 ```bash
 cd blink
-./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit
+CFLAGS="-g -O2 -Wno-cast-align" ./configure CC=cosmocc AR=cosmoar --enable-vfs
 make CC=cosmocc AR=cosmoar -j4
 cd ..
 ```
@@ -91,7 +91,7 @@ After a clean configure, always start with `make clean` before `make`:
 ```bash
 cd blink
 make clean
-./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit
+CFLAGS="-g -O2 -Wno-cast-align" ./configure CC=cosmocc AR=cosmoar --enable-vfs
 make CC=cosmocc AR=cosmoar -j4
 cd ..
 ```
@@ -147,7 +147,7 @@ zipinfo -1 bin/portator
 ### Full clean rebuild (Blink + Portator)
 
 ```bash
-cd blink && make clean && ./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit && make CC=cosmocc AR=cosmoar -j4 && cd ..
+cd blink && make clean && CFLAGS="-g -O2 -Wno-cast-align" ./configure CC=cosmocc AR=cosmoar --enable-vfs && make CC=cosmocc AR=cosmoar -j4 && cd ..
 make -j4
 ```
 
