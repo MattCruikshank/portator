@@ -211,7 +211,7 @@ static int CmdBuild(int argc, char **argv) {
     return 1;
   }
   if (pid == 0) {
-    execlp("gcc", "gcc",
+    execlp("musl-gcc", "musl-gcc",
            "-static", "-fno-pie", "-no-pie",
            "-I./include", "-I./include/cjson",
            "-DNO_OPEN_MEMSTREAM",
@@ -412,6 +412,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   struct Machine *m;
   unassert((g_machine = m = NewMachine(NewSystem(XED_MACHINE_MODE_LONG), 0)));
   m->system->exec = Exec;
+  m->system->isfork = true;
   LoadProgram(m, execfn, prog, argv, envp, NULL);
   SetupCod(m);
   for (i = 0; i < 10; ++i) {

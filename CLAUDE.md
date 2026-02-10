@@ -43,7 +43,7 @@ cd publish && ./portator list
 
 ## Architecture
 
-**Host/Guest split**: The host (main.c) links against Blink's `blink.a` and `zlib.a`, compiled with `cosmocc`. Guest apps are compiled with `gcc -static` (NOT cosmocc — using cosmocc for guests causes a deadlock in Cosmopolitan's internal `__zipos_init` when the guest's executable path is under `/zip/`). The final binary is a ZIP archive containing the executable plus embedded resources (wwwroot, include/, src/, and guest app binaries under apps/).
+**Host/Guest split**: The host (main.c) links against Blink's `blink.a` and `zlib.a`, compiled with `cosmocc`. Guest apps are compiled with `musl-gcc -static` (NOT cosmocc or glibc — cosmocc causes a deadlock in Cosmopolitan's `__zipos_init` when the guest's executable path is under `/zip/`, and glibc's complex NPTL/TLS exit cleanup crashes under Blink's emulation). The final binary is a ZIP archive containing the executable plus embedded resources (wwwroot, include/, src/, and guest app binaries under apps/).
 
 **Key source files**:
 - `main.c` — CLI dispatcher, Blink integration, custom syscall handler, program discovery, ZIP extraction
@@ -62,7 +62,7 @@ cd publish && ./portator list
 ## Dependencies
 
 - **cosmocc/cosmoar** — Cosmopolitan C compiler for the host (must be on PATH)
-- **gcc** — System GCC for compiling guest apps (`gcc -static`)
+- **musl-gcc** — musl-libc GCC wrapper for compiling guest apps (`musl-gcc -static`; install via `apt install musl-tools`)
 - **Blink** — x86-64 emulator in `blink/` directory (pre-built `blink/o//blink/blink.a`)
 - **CivetWeb** — Embedded HTTP/WebSocket server in `civetweb/`
 - **cJSON** — JSON parser vendored in `include/cjson/` and `src/`
