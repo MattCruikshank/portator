@@ -6,7 +6,7 @@ BLINK_DIR = blink
 BLINK_A = $(BLINK_DIR)/o//blink/blink.a
 ZLIB_A = $(BLINK_DIR)/o//third_party/libz/zlib.a
 
-CFLAGS = -O2 -fno-common -pthread -fcf-protection=none
+CFLAGS = -O2 -fno-common -pthread -fcf-protection=none -Wno-cast-align
 CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_DARWIN_C_SOURCE -D_DEFAULT_SOURCE \
            -D_BSD_SOURCE -D_GNU_SOURCE -iquote$(BLINK_DIR) -isystem $(BLINK_DIR)/third_party/libz
 LDFLAGS = -pthread

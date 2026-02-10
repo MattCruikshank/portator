@@ -11,7 +11,7 @@ Portator is an in-process x86-64 emulator platform built on a fork of [Blink](ht
 ### Full rebuild (Blink + Portator + guests)
 ```bash
 # From repo root:
-cd blink && make clean && ./configure CC=cosmocc AR=cosmoar && make CC=cosmocc AR=cosmoar -j4
+cd blink && make clean && ./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit && make CC=cosmocc AR=cosmoar -j4
 cd .. && make
 ```
 
@@ -43,7 +43,7 @@ cd publish && ./portator list
 
 ## Architecture
 
-**Host/Guest split**: The host (main.c) links against Blink's `blink.a` and `zlib.a`, compiled with `cosmocc`. It loads guest ELFs into the Blink emulator and intercepts custom syscalls. The final binary is a ZIP archive containing the executable plus embedded resources (wwwroot, include/, src/, and guest app binaries under apps/).
+**Host/Guest split**: The host (main.c) links against Blink's `blink.a` and `zlib.a`, compiled with `cosmocc`. Guest apps are compiled with `gcc -static` (NOT cosmocc — using cosmocc for guests causes a deadlock in Cosmopolitan's internal `__zipos_init` when the guest's executable path is under `/zip/`). The final binary is a ZIP archive containing the executable plus embedded resources (wwwroot, include/, src/, and guest app binaries under apps/).
 
 **Key source files**:
 - `main.c` — CLI dispatcher, Blink integration, custom syscall handler, program discovery, ZIP extraction
@@ -61,7 +61,8 @@ cd publish && ./portator list
 
 ## Dependencies
 
-- **cosmocc/cosmoar** — Cosmopolitan C compiler (must be on PATH)
+- **cosmocc/cosmoar** — Cosmopolitan C compiler for the host (must be on PATH)
+- **gcc** — System GCC for compiling guest apps (`gcc -static`)
 - **Blink** — x86-64 emulator in `blink/` directory (pre-built `blink/o//blink/blink.a`)
 - **CivetWeb** — Embedded HTTP/WebSocket server in `civetweb/`
 - **cJSON** — JSON parser vendored in `include/cjson/` and `src/`
@@ -80,6 +81,7 @@ cd publish && ./portator list
 ## Important Patterns
 
 - The APE binary doubles as a ZIP archive. After linking, the Makefile appends resources via `zip -qr`. Guest apps are added in the `package` step.
-- Blink's VFS is enabled but `/zip/` cannot be mounted directly (causes hangs). Local per-app mounts work via `VfsMount()`. Bundled app data is extracted to disk before running guests.
+- Blink's VFS is enabled (`--enable-vfs`). `/zip/` is mounted via `VfsMountZip()` in `CmdRunForked()`, giving guests access to bundled files.
+- JIT is currently disabled (`--disable-jit`) — re-enabling is tracked in Claude-TODO.md.
 - `CmdRunForked()` forks before executing guests so the emulator can be invoked repeatedly without re-initialization issues.
 - Console guests use standard C I/O. Only graphical/web guests need the custom syscall API.

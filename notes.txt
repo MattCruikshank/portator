@@ -66,3 +66,6 @@ ls
 zipinfo -1 bin/portator
 
 grep -r "SystemRoot" . --include='*.h*,*.c*'
+
+
+claude --resume ef4e9ad1-1273-4790-a3cb-d3d7aebb13b0

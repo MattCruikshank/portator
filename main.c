@@ -387,23 +387,18 @@ static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
     case 0x7006: {  /* version: di=buf_ptr, si=buf_len */
       const char *ver = "Portator " PORTATOR_VERSION;
       size_t vlen = strlen(ver);
-      LOGF("portator_version: ver='%s' vlen=%zu si=%llu", ver, vlen, (unsigned long long)si);
       if ((u64)vlen >= si) vlen = si - 1;
       if (CopyToUserWrite(m, di, (void *)ver, vlen + 1))
         return -1;
-      LOGF("portator_version: returning %zu", vlen);
       return vlen;
     }
     case 0x7007: {  /* list: di=buf_ptr, si=buf_len */
       char *json = BuildAppListJson();
-      if (!json) { LOGF("portator_list: BuildAppListJson failed"); return -1; }
+      if (!json) return -1;
       size_t jlen = strlen(json) + 1;
-      LOGF("portator_list: di=%#llx si=%llu jlen=%zu json='%s'",
-           (unsigned long long)di, (unsigned long long)si, jlen, json);
       if (!di || !si) { free(json); return jlen; }
       if (jlen > (u64)si) jlen = si;
       i64 rc = CopyToUserWrite(m, di, (void *)json, jlen) ? -1 : (i64)jlen;
-      LOGF("portator_list: CopyToUserWrite rc=%lld", (long long)rc);
       free(json);
       return rc;
     }
@@ -415,32 +410,9 @@ static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
 static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   int i;
   struct Machine *m;
-  Print(2, "DBG Exec: NewMachine\n");
   unassert((g_machine = m = NewMachine(NewSystem(XED_MACHINE_MODE_LONG), 0)));
   m->system->exec = Exec;
-  Print(2, "DBG Exec: LoadProgram '");
-  Print(2, prog);
-  Print(2, "'\n");
   LoadProgram(m, execfn, prog, argv, envp, NULL);
-  Print(2, "DBG Exec: LoadProgram done\n");
-  /* Dump first 16 bytes at guest entry point to verify ELF load */
-  {
-    u8 buf[16];
-    char hex[64];
-    i64 pc = m->ip;
-    for (int j = 0; j < 16; j++) {
-      buf[j] = Load8(LookupAddress(m, pc + j));
-      snprintf(hex + j * 3, 4, "%02x ", buf[j]);
-    }
-    hex[48] = '\0';
-    char pcstr[32];
-    snprintf(pcstr, sizeof(pcstr), "0x%llx", (unsigned long long)pc);
-    Print(2, "DBG Exec: entry=");
-    Print(2, pcstr);
-    Print(2, " bytes=");
-    Print(2, hex);
-    Print(2, "\n");
-  }
   SetupCod(m);
   for (i = 0; i < 10; ++i) {
     AddStdFd(&m->system->fds, i);
@@ -449,7 +421,6 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   if (!getrlimit(RLIMIT_NOFILE, &rlim)) {
     XlatRlimitToLinux(m->system->rlim + RLIMIT_NOFILE_LINUX, &rlim);
   }
-  Print(2, "DBG Exec: Blink\n");
   Blink(m);
 }
 
@@ -494,9 +465,7 @@ static int CmdRunForked(int argc, char **argv) {
 
   /* Mount /zip so guest can access bundled files */
 #ifndef DISABLE_VFS
-  Print(2, "DBG: calling VfsMountZip\n");
   VfsMountZip();
-  Print(2, "DBG: VfsMountZip done\n");
 
   /* Ensure /tmp exists so guest tmpfile() works (mustach needs it) */
   VfsMkdir(AT_FDCWD, "/tmp", 0755);
@@ -514,7 +483,6 @@ static int CmdRunForked(int argc, char **argv) {
   // VfsMount(appdata, "/app", "hostfs", 0, NULL);
 #endif
 
-  Print(2, "DBG: calling Exec\n");
   /* Rewrite argv so the guest sees: <name> [args...] */
   argv[2] = elfpath;
   return Exec(elfpath, elfpath, argv + 2, environ);
@@ -537,9 +505,19 @@ static int CmdRun(int argc, char **argv) {
     Print(2, "portator: waitpid failed\n");
     return 1;
   }
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    Print(2, "portator: build failed\n");
-    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+  if (!WIFEXITED(status)) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "portator: killed by signal %d\n",
+             WTERMSIG(status));
+    Print(2, buf);
+    return 1;
+  }
+  if (WEXITSTATUS(status) != 0) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "portator: exited with status %d\n",
+             WEXITSTATUS(status));
+    Print(2, buf);
+    return WEXITSTATUS(status);
   }
 
   return 0;
@@ -659,17 +637,12 @@ int main(int argc, char *argv[]) {
     static char cwdbuf[PATH_MAX];
     if (getcwd(cwdbuf, sizeof(cwdbuf))) {
       FLAG_prefix = cwdbuf;
-      Print(2, "DBG main: VFS prefix='");
-      Print(2, cwdbuf);
-      Print(2, "'\n");
     }
   }
-  Print(2, "DBG main: calling VfsInit\n");
   if (VfsInit(FLAG_prefix)) {
     Print(2, "portator: vfs init failed\n");
     return 1;
   }
-  Print(2, "DBG main: VfsInit done\n");
 #endif
   HandleSigs();
   InitBus();

@@ -2128,7 +2128,7 @@ static void writestr_stdio(const char *str, const uintptr slen)
 int main(int argc, char **argv)
 {
     static ZMachineState zmachine_state;
-    const char *fname = (argc >= 2) ? argv[1] : "zork1.dat";
+    const char *fname = (argc >= 2) ? argv[1] : "zip/apps/mojozork/data/zork1.dat";
 
     GState = &zmachine_state;
     GState->startup_script = (argc >= 3) ? argv[2] : NULL;
