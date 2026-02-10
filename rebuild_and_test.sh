@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 cd ~/source/portator/publish && rm -rf *
-cd ~/source/portator/blink && make clean && ./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit && make CC=cosmocc AR=cosmoar -j4
+cd ~/source/portator/blink && ./configure CC=cosmocc AR=cosmoar --enable-vfs --disable-jit && make clean && make CC=cosmocc AR=cosmoar -j4
 cd ~/source/portator && make clean && make
 cd ~/source/portator/publish && zipinfo -1 portator
 # rm -f /tmp/portator.log
