@@ -69,3 +69,41 @@ grep -r "SystemRoot" . --include='*.h*,*.c*'
 
 
 claude --resume ef4e9ad1-1273-4790-a3cb-d3d7aebb13b0
+
+///////
+
+git submodule update --init
+
+cd blink && git pull && cd .. && git add blink
+
+///////
+
+ A typical workflow for a simultaneous change:
+
+  1. Edit files in blink/, commit and push there:
+  cd blink
+  # edit files
+  git add -A && git commit -m "fix something"
+  git push
+  cd ..
+  2. Then in portator, the submodule pointer has moved, so commit that:
+  git add blink
+  git commit -m "update blink submodule"
+
+  The submodule pin in portator is just a commit hash — whenever you make commits inside blink/, you update the pin in portator by
+  staging the blink directory.
+
+  Want me to go ahead and convert it to a submodule now?
+
+❯ But I don't have to add and push in the blink folder, for my local portator development to see those changes, right?
+
+● Right. The blink directory is just a regular checkout on disk. When you edit files in blink/, your portator build sees them
+  immediately — make compiles from the working tree, not from any committed state.
+
+  You only need to commit inside blink/ when you want to:
+  - Push your blink changes to GitHub
+  - Record the exact blink commit in portator's submodule pin
+
+  For day-to-day development, just edit and build. Want me to do the submodule conversion?
+
+  
