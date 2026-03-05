@@ -5,7 +5,7 @@ A single portable binary that runs x86-64 guest apps via in-process emulation. N
 ## Quick Start
 
 ```bash
-curl -LO https://github.com/MattCruikshank/portator/releases/download/v0.1.0/portator
+curl -LO https://github.com/MattCruikshank/portator/releases/download/v0.2.0/portator
 chmod +x portator
 ./portator
 ```
@@ -14,7 +14,7 @@ chmod +x portator
 
 ```
 $ ./portator list
-Running on Portator v0.1.0
+Running on Portator v0.2.0
   list
   tcc
   license
@@ -40,7 +40,7 @@ Building hello...
 Built hello/bin/hello
 
 $ ./portator run hello
-Running on Portator v0.1.0
+Running on Portator v0.2.0
 Hello from hello!
 ```
 
