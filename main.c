@@ -682,27 +682,6 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "run") == 0) {
     return CmdRun(argc, argv);
   }
-  if (strcmp(argv[1], "init") == 0) {
-    char *init_argv[] = { argv[0], (char *)"run", (char *)"init", NULL };
-    return CmdRun(3, init_argv);
-  }
-  if (strcmp(argv[1], "list") == 0) {
-    char *list_argv[] = { argv[0], (char *)"run", (char *)"list", NULL };
-    return CmdRun(3, list_argv);
-  }
-  if (strcmp(argv[1], "license") == 0) {
-    char *lic_argv[] = { argv[0], (char *)"run", (char *)"license", NULL };
-    return CmdRun(3, lic_argv);
-  }
-  if (strcmp(argv[1], "new") == 0) {
-    /* portator new <type> <name> -> run new <type> <name> */
-    char *new_argv[6] = { argv[0], (char *)"run", (char *)"new", NULL };
-    int new_argc = 3;
-    for (int i = 2; i < argc && new_argc < 5; i++)
-      new_argv[new_argc++] = argv[i];
-    new_argv[new_argc] = NULL;
-    return CmdRun(new_argc, new_argv);
-  }
   /* Try as a guest app: portator <name> [args...] -> portator run <name> [args...] */
   {
     char probe[PATH_MAX];
