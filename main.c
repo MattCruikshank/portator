@@ -400,7 +400,9 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
 │ Portator custom syscall handler                                             │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
-#define PORTATOR_VERSION "0.1.0"
+#ifndef PORTATOR_VERSION
+#define PORTATOR_VERSION "0.0.0-dev"
+#endif
 
 /* Build a JSON string like {"apps":[{"name":"snake"},{"name":"list"}]}
    by scanning for directories where <name>/<name>.c exists.

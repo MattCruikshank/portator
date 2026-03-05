@@ -2,6 +2,7 @@ CC = cosmocc
 AR = cosmoar
 BLINK_DIR = blink
 TCC_DIR = tcc
+VERSION = $(shell git describe --tags --always 2>/dev/null || echo "0.0.0-dev")
 
 # Blink's default mode uses o// (empty MODE)
 BLINK_A = $(BLINK_DIR)/o//blink/blink.a
@@ -47,7 +48,7 @@ bin:
 
 # Compile object files
 bin/portator.o: main.c web_server.h | bin
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DPORTATOR_VERSION='"$(VERSION)"' -c -o $@ $<
 
 bin/web_server.o: web_server.c web_server.h civetweb/civetweb.h | bin
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
