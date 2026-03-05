@@ -39,6 +39,7 @@ extern char **environ;
 static char g_pathbuf[PATH_MAX];
 
 static void Print(int fd, const char *s);
+static int CmdRun(int argc, char **argv);
 
 /*─────────────────────────────────────────────────────────────────────────────╗
 │ portator new — project scaffolding                                          │
@@ -164,12 +165,82 @@ static int MakeDir(const char *path) {
 │ portator build — compile a guest project                                    │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 
+static int HasCommand(const char *cmd) {
+  /* Check common bin directories for the command */
+  static const char *dirs[] = {
+    "/usr/local/bin", "/usr/bin", "/bin", NULL
+  };
+  char path[PATH_MAX];
+  for (const char **d = dirs; *d; d++) {
+    snprintf(path, sizeof(path), "%s/%s", *d, cmd);
+    if (!access(path, X_OK)) return 1;
+  }
+  return 0;
+}
+
+static const char *FindSource(const char *name, char *buf, size_t buflen) {
+  static const char *c_exts[] = { ".c", NULL };
+  static const char *cpp_exts[] = { ".cpp", ".cc", ".c++", NULL };
+  const char **exts;
+  for (exts = c_exts; *exts; exts++) {
+    snprintf(buf, buflen, "%s/%s%s", name, name, *exts);
+    if (!access(buf, F_OK)) return *exts;
+  }
+  for (exts = cpp_exts; *exts; exts++) {
+    snprintf(buf, buflen, "%s/%s%s", name, name, *exts);
+    if (!access(buf, F_OK)) return *exts;
+  }
+  return NULL;
+}
+
+static int IsCppExt(const char *ext) {
+  return strcmp(ext, ".cpp") == 0 ||
+         strcmp(ext, ".cc") == 0 ||
+         strcmp(ext, ".c++") == 0;
+}
+
+static int BuildWithMuslGcc(const char *src, const char *out) {
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    execlp("musl-gcc", "musl-gcc",
+           "-static", "-fno-pie", "-no-pie",
+           "-I./include", "-I./include/cjson",
+           "-DNO_OPEN_MEMSTREAM",
+           "-o", out, src,
+           "./src/cJSON.c",
+           "./src/mustach.c",
+           "./src/mustach-wrap.c",
+           "./src/mustach-cjson.c",
+           "-lm",
+           (char *)NULL);
+    _exit(127);
+  }
+  int status;
+  if (waitpid(pid, &status, 0) < 0) return -1;
+  return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
+
+static int BuildWithTcc(const char *src, const char *out, char **argv) {
+  char *tcc_argv[] = {
+    argv[0], (char *)"run", (char *)"tcc",
+    (char *)"-I./include", (char *)"-I./include/cjson",
+    (char *)"-DNO_OPEN_MEMSTREAM",
+    (char *)"-o", (char *)out, (char *)src,
+    (char *)"./src/cJSON.c",
+    (char *)"./src/mustach.c",
+    (char *)"./src/mustach-wrap.c",
+    (char *)"./src/mustach-cjson.c",
+    NULL
+  };
+  return CmdRun(13, tcc_argv);
+}
+
 static int CmdBuild(int argc, char **argv) {
   char src[PATH_MAX];
   char out[PATH_MAX];
   const char *name;
-  pid_t pid;
-  int status;
+  const char *ext;
 
   if (argc < 3) {
     Print(2, "Usage: portator build <name>\n");
@@ -177,16 +248,15 @@ static int CmdBuild(int argc, char **argv) {
   }
   name = argv[2];
 
-  snprintf(src, sizeof(src), "%s/%s.c", name, name);
-  snprintf(out, sizeof(out), "%s/bin/%s", name, name);
-
-  /* Check source exists */
-  if (access(src, F_OK)) {
-    Print(2, "portator: source not found: ");
-    Print(2, src);
+  ext = FindSource(name, src, sizeof(src));
+  if (!ext) {
+    Print(2, "portator: source not found for: ");
+    Print(2, name);
     Print(2, "\n");
     return 1;
   }
+
+  snprintf(out, sizeof(out), "%s/bin/%s", name, name);
 
   /* Ensure bin/ directory exists */
   {
@@ -205,32 +275,45 @@ static int CmdBuild(int argc, char **argv) {
   Print(1, name);
   Print(1, "...\n");
 
-  pid = fork();
-  if (pid < 0) {
-    Print(2, "portator: fork failed\n");
-    return 1;
+  int ret;
+  if (IsCppExt(ext)) {
+    /* C++ requires a system compiler */
+    if (!HasCommand("g++")) {
+      Print(2, "portator: g++ required for C++ files (apt install g++)\n");
+      return 1;
+    }
+    pid_t pid = fork();
+    if (pid < 0) { Print(2, "portator: fork failed\n"); return 1; }
+    if (pid == 0) {
+      execlp("g++", "g++",
+             "-static", "-fno-pie", "-no-pie",
+             "-I./include", "-I./include/cjson",
+             "-DNO_OPEN_MEMSTREAM",
+             "-o", out, src,
+             "./src/cJSON.c",
+             "./src/mustach.c",
+             "./src/mustach-wrap.c",
+             "./src/mustach-cjson.c",
+             "-lm",
+             (char *)NULL);
+      _exit(127);
+    }
+    int status;
+    if (waitpid(pid, &status, 0) < 0) { Print(2, "portator: waitpid failed\n"); return 1; }
+    ret = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : 1;
+  } else {
+    /* C: try musl-gcc first, fall back to bundled TCC */
+    if (HasCommand("musl-gcc")) {
+      ret = BuildWithMuslGcc(src, out);
+    } else {
+      Print(1, "Using bundled TCC compiler\n");
+      ret = BuildWithTcc(src, out, argv);
+    }
   }
-  if (pid == 0) {
-    execlp("musl-gcc", "musl-gcc",
-           "-static", "-fno-pie", "-no-pie",
-           "-I./include", "-I./include/cjson",
-           "-DNO_OPEN_MEMSTREAM",
-           "-o", out, src,
-           "./src/cJSON.c",
-           "./src/mustach.c",
-           "./src/mustach-wrap.c",
-           "./src/mustach-cjson.c",
-           "-lm",
-           (char *)NULL);
-    _exit(127);
-  }
-  if (waitpid(pid, &status, 0) < 0) {
-    Print(2, "portator: waitpid failed\n");
-    return 1;
-  }
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+
+  if (ret) {
     Print(2, "portator: build failed\n");
-    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+    return 1;
   }
 
   Print(1, "Built ");
@@ -243,8 +326,6 @@ static int CmdBuild(int argc, char **argv) {
 │ portator run — run a guest by project name                                  │
 │ TODO: implement proper star/bin/star discovery instead of name/bin/name     │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-
-static int CmdRun(int argc, char **argv);
 
 static void OnSigSys(int sig) {
   // do nothing
@@ -620,9 +701,6 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "init") == 0) {
     return CmdInit(argc, argv);
   }
-  if (strcmp(argv[1], "build") == 0) {
-    return CmdBuild(argc, argv);
-  }
   if (strcmp(argv[1], "web") == 0) {
     return CmdWeb(argc, argv);
   }
@@ -647,6 +725,9 @@ int main(int argc, char *argv[]) {
 #endif
   HandleSigs();
   InitBus();
+  if (strcmp(argv[1], "build") == 0) {
+    return CmdBuild(argc, argv);
+  }
   if (strcmp(argv[1], "run") == 0) {
     return CmdRun(argc, argv);
   }
@@ -666,6 +747,28 @@ int main(int argc, char *argv[]) {
       new_argv[new_argc++] = argv[i];
     new_argv[new_argc] = NULL;
     return CmdRun(new_argc, new_argv);
+  }
+  /* Try as a guest app: portator <name> [args...] -> portator run <name> [args...] */
+  {
+    char probe[PATH_MAX];
+    snprintf(probe, sizeof(probe), "%s/bin/%s", argv[1], argv[1]);
+    int found = !access(probe, F_OK);
+    if (!found) {
+      snprintf(probe, sizeof(probe), "/zip/apps/%s/bin/%s", argv[1], argv[1]);
+      found = !access(probe, F_OK);
+    }
+    if (found) {
+      /* Rewrite argv: insert "run" before the command name */
+      char **run_argv = malloc((argc + 2) * sizeof(char *));
+      if (!run_argv) { Print(2, "portator: out of memory\n"); return 1; }
+      run_argv[0] = argv[0];
+      run_argv[1] = (char *)"run";
+      for (int i = 1; i <= argc; i++)
+        run_argv[i + 1] = argv[i];
+      int ret = CmdRun(argc + 1, run_argv);
+      free(run_argv);
+      return ret;
+    }
   }
   if (!Commandv(argv[1], g_pathbuf, sizeof(g_pathbuf))) {
     Print(2, "portator: command not found: ");

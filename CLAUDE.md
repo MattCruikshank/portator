@@ -61,9 +61,10 @@ cd publish && ./portator list
 
 ## Dependencies
 
-- **cosmocc/cosmoar** — Cosmopolitan C compiler for the host (must be on PATH)
+- **cosmocc/cosmoar** — Cosmopolitan C compiler for the host (must be on PATH). Use `cosmocc`, NOT `fatcosmocc` — the project switched from fat builds to single-arch. See PREREQS.md for details.
 - **musl-gcc** — musl-libc GCC wrapper for compiling guest apps (`musl-gcc -static`; install via `apt install musl-tools`)
-- **Blink** — x86-64 emulator in `blink/` directory (pre-built `blink/o//blink/blink.a`)
+- **Blink** — x86-64 emulator in `blink/` submodule (`blink/o//blink/blink.a`)
+- **TinyCC** — Embedded C compiler in `tcc/` submodule. Compiled with musl-gcc as a guest app, bundled in the APE zip with musl headers and libc.a. See TCC.md.
 - **CivetWeb** — Embedded HTTP/WebSocket server in `civetweb/`
 - **cJSON** — JSON parser vendored in `include/cjson/` and `src/`
 - **Mustach** — Mustache template engine vendored in `include/` and `src/`
@@ -75,13 +76,30 @@ cd publish && ./portator list
 | snake | Terminal snake game |
 | list | Program discovery (calls LIST syscall, parses JSON with cJSON) |
 | new | Project scaffolding (uses Mustach templates from `new/templates/`) |
-| license | License/credits display |
-| mojozork | Z-machine interactive fiction (reads `mojozork/data/zork1.dat`) |
+| license | License/credits display (reads from `zip/apps/license/data/`) |
+| mojozork | Z-machine interactive fiction (reads `zip/apps/mojozork/data/zork1.dat`) |
+| tcc | Embedded C compiler (TinyCC with musl libc) |
+| hello-go | Go guest app demo |
+
+## Guest Zip Access
+
+Guests access bundled files via **relative** `zip/apps/<name>/...` paths — NOT absolute `/zip/...` paths. This works because:
+
+1. `FLAG_prefix` is set to cwd in main.c, making cwd the VFS root
+2. `VfsMountZip()` is called in `CmdRunForked()`, which uses Cosmopolitan's zipos to expose the APE's zip contents
+3. Cosmopolitan makes zip contents accessible at the relative path `zip/` from the binary's location
+4. The VFS hostfs layer passes these paths through to Cosmopolitan's libc, which handles zipos transparently
+
+So a guest doing `fopen("zip/apps/license/data/portator/LICENSE", "r")` reads directly from the APE binary's zip store — no extraction to disk needed.
+
+**Testing zip access**: Always test from the `publish/` directory (`cd publish && ./portator ...`). From the repo root, local files on disk may shadow zip contents, hiding bugs.
 
 ## Important Patterns
 
 - The APE binary doubles as a ZIP archive. After linking, the Makefile appends resources via `zip -qr`. Guest apps are added in the `package` step.
-- Blink's VFS is enabled (`--enable-vfs`). `/zip/` is mounted via `VfsMountZip()` in `CmdRunForked()`, giving guests access to bundled files.
+- Blink's VFS is enabled (`--enable-vfs`). `VfsMountZip()` in `CmdRunForked()` gives guests access to bundled files via relative `zip/apps/...` paths.
 - JIT is currently disabled (`--disable-jit`) — re-enabling is tracked in Claude-TODO.md.
 - `CmdRunForked()` forks before executing guests so the emulator can be invoked repeatedly without re-initialization issues.
 - Console guests use standard C I/O. Only graphical/web guests need the custom syscall API.
+- App data goes in `<name>/zip/` in the source tree. The Makefile's `package` step copies `<name>/zip/*` → `apps/<name>/` in the APE zip. Legacy paths (`<name>/data/`, `<name>/templates/`) are also supported.
+- Always run full `make` (not just `make portator`) to ensure `publish/portator` is updated. The user tests from `publish/`.
