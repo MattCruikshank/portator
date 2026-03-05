@@ -94,6 +94,8 @@ So a guest doing `fopen("zip/apps/license/data/portator/LICENSE", "r")` reads di
 
 **Testing zip access**: Always test from the `publish/` directory (`cd publish && ./portator ...`). From the repo root, local files on disk may shadow zip contents, hiding bugs.
 
+**Guest filesystem visibility**: `FLAG_prefix` maps the guest's `/` to the host's cwd. Guests see `.` = `/` = host cwd. Guests **can** traverse `..` to access the host filesystem above cwd — there is no sandbox. `zip/` provides access to APE zip contents. Absolute host paths like `/etc` or `/home` are not directly accessible (they resolve relative to the prefix). Guest apps are trusted code — this is an app platform, not a security sandbox.
+
 ## Important Patterns
 
 - The APE binary doubles as a ZIP archive. After linking, the Makefile appends resources via `zip -qr`. Guest apps are added in the `package` step.
