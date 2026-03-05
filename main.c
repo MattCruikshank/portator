@@ -599,17 +599,16 @@ int main(int argc, char *argv[]) {
     Print(1, "  Usage: portator <command> [args...]\n");
     Print(1, "\n");
     Print(1, "  Commands:\n");
+    Print(1, "    <name> [args...]    Run a guest app\n");
+    Print(1, "    shell               Interactive shell\n");
+    Print(1, "    list                List available apps\n");
     Print(1, "    new <type> <name>   Create a new project (console, gui, web)\n");
-    Print(1, "    build <name>        Compile a project with gcc\n");
-    Print(1, "    run <name>          Run a program in the emulator\n");
-    Print(1, "    list                List discovered programs\n");
+    Print(1, "    build <name>        Compile a project\n");
     Print(1, "    init                Extract shared include/src files\n");
     Print(1, "    web [port]          Start the web UI (default: 6711)\n");
     Print(1, "    credits             Show third-party credits\n");
     Print(1, "    license             Show license information\n");
     Print(1, "    help                Show this message\n");
-    Print(1, "\n");
-    Print(1, "./portator run mojozork zip/apps/mojozork/data/zork1.dat\n");
     Print(1, "\n");
     Print(1, "  https://portator.net\n");
     Print(1, "\n");
@@ -678,9 +677,6 @@ int main(int argc, char *argv[]) {
   InitBus();
   if (strcmp(argv[1], "build") == 0) {
     return CmdBuild(argc, argv);
-  }
-  if (strcmp(argv[1], "run") == 0) {
-    return CmdRun(argc, argv);
   }
   /* Try as a guest app: portator <name> [args...] -> portator run <name> [args...] */
   {
