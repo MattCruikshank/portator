@@ -1,6 +1,7 @@
 CC = cosmocc
 AR = cosmoar
 BLINK_DIR = blink
+TCC_DIR = tcc
 
 # Blink's default mode uses o// (empty MODE)
 BLINK_A = $(BLINK_DIR)/o//blink/blink.a
@@ -12,16 +13,24 @@ CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_DARWIN_C_SOURCE -D_DEFAULT_SOURCE \
 LDFLAGS = -pthread
 LDLIBS = -lrt -lm
 
+# TCC compile flags (builds TCC itself as a static x86-64 ELF guest)
+TCC_DEFINES = -DONE_SOURCE=1 -DTCC_TARGET_X86_64 \
+  -DCONFIG_TCCDIR='"zip/apps/tcc"' \
+  -DCONFIG_TCC_CRTPREFIX='"zip/apps/tcc/musl-lib"' \
+  '-DCONFIG_TCC_SYSINCLUDEPATHS="zip/apps/tcc/tcc-include:zip/apps/tcc/musl-include"' \
+  '-DCONFIG_TCC_LIBPATHS="zip/apps/tcc/musl-lib:zip/apps/tcc/tcc-lib"' \
+  '-DCONFIG_TCC_SWITCHES="-static"'
+
 # Guest apps to build (directories with <name>/<name>.c)
 APPS = snake list new license mojozork
 
 # Go guest apps (directories with <name>/<name>.go)
 GO_APPS = hello-go
 
-.PHONY: all clean clean-portator portator apps package publish
+.PHONY: all clean clean-portator portator apps tcc package publish
 
 # Default: build everything
-all: clean-portator portator apps package publish
+all: clean-portator portator apps tcc package publish
 
 # Remove just the portator binary (keeps .o files)
 clean-portator:
@@ -30,6 +39,7 @@ clean-portator:
 # Remove everything
 clean:
 	rm -rf bin
+	rm -rf $(TCC_DIR)/bin $(TCC_DIR)/zip $(TCC_DIR)/c2str $(TCC_DIR)/tccdefs_.h
 
 # Create bin directory
 bin:
@@ -69,6 +79,21 @@ apps: portator
 	    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$$app/bin/$$app" "./$$app/$$app.go" || exit 1; \
 	  fi; \
 	done
+
+# Build TCC as a static guest binary and stage its toolchain data
+tcc: portator
+	@echo "Building TCC..."
+	@mkdir -p $(TCC_DIR)/bin
+	@cd $(TCC_DIR) && musl-gcc -DC2STR conftest.c -o c2str && ./c2str include/tccdefs.h tccdefs_.h
+	@cd $(TCC_DIR) && musl-gcc -static $(TCC_DEFINES) -o bin/tcc tcc.c -lm
+	@echo "Staging TCC toolchain data..."
+	@mkdir -p $(TCC_DIR)/zip/musl-include $(TCC_DIR)/zip/musl-lib
+	@mkdir -p $(TCC_DIR)/zip/tcc-include $(TCC_DIR)/zip/tcc-lib
+	@cp -r /usr/include/x86_64-linux-musl/* $(TCC_DIR)/zip/musl-include/
+	@cp /usr/lib/x86_64-linux-musl/libc.a /usr/lib/x86_64-linux-musl/crt*.o $(TCC_DIR)/zip/musl-lib/
+	@cp /usr/lib/x86_64-linux-gnu/tcc/include/* $(TCC_DIR)/zip/tcc-include/
+	@cp /usr/lib/x86_64-linux-gnu/tcc/libtcc1.a $(TCC_DIR)/zip/tcc-lib/
+	@echo "Built TCC"
 
 # Package app binaries and data into the zip
 package:
