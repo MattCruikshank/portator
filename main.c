@@ -496,25 +496,41 @@ static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
       free(json);
       return rc;
     }
-    case 0x7008: {  /* launch: di=name_ptr (guest string) */
-      char name[256];
-      /* Read guest string byte by byte until NUL */
-      size_t i;
-      for (i = 0; i < sizeof(name) - 1; i++) {
-        u8 byte;
-        if (CopyFromUserRead(m, &byte, di + i, 1)) return -1;
-        name[i] = byte;
-        if (!byte) break;
+    case 0x7008: {  /* launch: di=name_ptr, si=argv_ptr (0=none), dx=envp_ptr (0=inherit) */
+      char *name = CopyStr(m, di);
+      if (!name) return -1;
+      /* Read argv from guest if provided */
+      char **guest_argv = NULL;
+      if (si) guest_argv = CopyStrList(m, si);
+      /* Read envp from guest if provided */
+      char **guest_envp = NULL;
+      if (dx) guest_envp = CopyStrList(m, dx);
+      /* Build the run argv: "portator" "run" <name> [guest_argv...] NULL */
+      int nargs = 0;
+      if (guest_argv) {
+        while (guest_argv[nargs]) nargs++;
       }
-      name[sizeof(name) - 1] = '\0';
-      /* Fork and run the target guest */
+      int run_argc = 3 + nargs;
+      char **run_argv = (char **)malloc((run_argc + 1) * sizeof(char *));
+      if (!run_argv) return -1;
+      run_argv[0] = (char *)"portator";
+      run_argv[1] = (char *)"run";
+      run_argv[2] = name;
+      for (int i = 0; i < nargs; i++)
+        run_argv[3 + i] = guest_argv[i];
+      run_argv[run_argc] = NULL;
       pid_t pid = fork();
-      if (pid < 0) return -1;
+      if (pid < 0) { free(run_argv); return -1; }
       if (pid == 0) {
-        char *run_argv[] = { (char *)"portator", (char *)"run", name, NULL };
-        CmdRunForked(3, run_argv);
+        /* Set environment in child only */
+        if (guest_envp) {
+          for (int i = 0; guest_envp[i]; i++)
+            putenv(guest_envp[i]);
+        }
+        CmdRunForked(run_argc, run_argv);
         _exit(127);
       }
+      free(run_argv);
       int status;
       if (waitpid(pid, &status, 0) < 0) return -1;
       if (WIFEXITED(status)) return WEXITSTATUS(status);

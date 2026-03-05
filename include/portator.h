@@ -72,9 +72,17 @@ static inline long portator_list(char *buf, long len) {
 }
 
 /* Launch another guest app by name. Blocks until the child exits.
-   Returns the child's exit code, or -1 on error. */
+   Returns the child's exit code, or -1 on error.
+   argv: NULL-terminated argument array (passed to guest main), or NULL.
+   envp: NULL-terminated "KEY=VALUE" array added to child env, or NULL. */
 static inline long portator_launch(const char *name) {
     return portator_syscall(PORTATOR_SYS_LAUNCH, (long)name, 0, 0);
+}
+
+static inline long portator_launch_ex(const char *name, char *const argv[],
+                                       char *const envp[]) {
+    return portator_syscall(PORTATOR_SYS_LAUNCH, (long)name,
+                            (long)argv, (long)envp);
 }
 
 #endif /* PORTATOR_H_ */
