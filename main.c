@@ -13,8 +13,6 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <unistd.h>
-#include <utime.h>
-#include <libgen.h>
 #include <dirent.h>
 
 #include "config.h"
@@ -41,103 +39,6 @@ static char g_pathbuf[PATH_MAX];
 static void Print(int fd, const char *s);
 static int CmdRun(int argc, char **argv);
 static int CmdRunForked(int argc, char **argv);
-
-/*─────────────────────────────────────────────────────────────────────────────╗
-│ portator new — project scaffolding                                          │
-╚─────────────────────────────────────────────────────────────────────────────*/
-
-static int ExtractFromZip(const char *relpath) {
-  char zippath[PATH_MAX];
-  char outpath[PATH_MAX];
-  char parentdir[PATH_MAX];
-  char *parent;
-  FILE *fin, *fout;
-  char buf[4096];
-  size_t n;
-
-  snprintf(zippath, sizeof(zippath), "/zip/%s", relpath);
-  snprintf(outpath, sizeof(outpath), "./%s", relpath);
-
-  /* Create parent directories recursively */
-  snprintf(parentdir, sizeof(parentdir), "%s", outpath);
-  parent = dirname(parentdir);
-  {
-    char tmp[PATH_MAX];
-    char *p;
-    snprintf(tmp, sizeof(tmp), "%s", parent);
-    for (p = tmp + 1; *p; p++) {
-      if (*p == '/') {
-        *p = '\0';
-        mkdir(tmp, 0755);
-        *p = '/';
-      }
-    }
-    if (mkdir(tmp, 0755) && errno != EEXIST) {
-      Print(2, "portator: cannot create directory ");
-      Print(2, tmp);
-      Print(2, "\n");
-      return -1;
-    }
-  }
-
-  fin = fopen(zippath, "r");
-  if (!fin) {
-    Print(2, "portator: not found in zip: ");
-    Print(2, zippath);
-    Print(2, "\n");
-    return -1;
-  }
-  fout = fopen(outpath, "w");
-  if (!fout) {
-    fclose(fin);
-    Print(2, "portator: cannot create ");
-    Print(2, outpath);
-    Print(2, "\n");
-    return -1;
-  }
-  while ((n = fread(buf, 1, sizeof(buf), fin)) > 0) {
-    fwrite(buf, 1, n, fout);
-  }
-  fclose(fin);
-  fclose(fout);
-  utime(outpath, NULL);
-  return 0;
-}
-
-// TODO: Port to an app, make it dynamic
-static const char *kSharedFiles[] = {
-  "include/portator.h",
-  "include/cjson/cJSON.h",
-  "include/mustach.h",
-  "include/mustach-wrap.h",
-  "include/mustach-cjson.h",
-  "src/cJSON.c",
-  "src/mustach.c",
-  "src/mustach-wrap.c",
-  "src/mustach-cjson.c",
-  NULL
-};
-
-// TODO: Port to an app
-static int ExtractSharedFiles(void) {
-  int i;
-  for (i = 0; kSharedFiles[i]; i++) {
-    if (ExtractFromZip(kSharedFiles[i])) return -1;
-    Print(1, "  ");
-    Print(1, kSharedFiles[i]);
-    Print(1, "\n");
-  }
-  return 0;
-}
-
-static int CmdInit(int argc, char **argv) {
-  (void)argc;
-  (void)argv;
-  Print(1, "Extracting shared files...\n");
-  if (ExtractSharedFiles()) return 1;
-  Print(1, "Done.\n");
-  return 0;
-}
 
 static int WriteFile(const char *path, const char *content, size_t len) {
   FILE *f = fopen(path, "w");
@@ -278,8 +179,8 @@ static int CmdBuild(int argc, char **argv) {
 
   /* Extract shared files if needed */
   if (access("include", F_OK) || access("src", F_OK)) {
-    Print(1, "Extracting shared files...\n");
-    if (ExtractSharedFiles()) return 1;
+    char *init_argv[] = { argv[0], (char *)"run", (char *)"init", NULL };
+    if (CmdRun(3, init_argv)) return 1;
   }
 
   Print(1, "Building ");
@@ -751,9 +652,6 @@ int main(int argc, char *argv[]) {
     Print(1, "\n");
     return 0;
   }
-  if (strcmp(argv[1], "init") == 0) {
-    return CmdInit(argc, argv);
-  }
   if (strcmp(argv[1], "web") == 0) {
     return CmdWeb(argc, argv);
   }
@@ -783,6 +681,10 @@ int main(int argc, char *argv[]) {
   }
   if (strcmp(argv[1], "run") == 0) {
     return CmdRun(argc, argv);
+  }
+  if (strcmp(argv[1], "init") == 0) {
+    char *init_argv[] = { argv[0], (char *)"run", (char *)"init", NULL };
+    return CmdRun(3, init_argv);
   }
   if (strcmp(argv[1], "list") == 0) {
     char *list_argv[] = { argv[0], (char *)"run", (char *)"list", NULL };
