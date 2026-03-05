@@ -1293,6 +1293,7 @@ static void opcode_read(void)
     }
 
     updateStatusBar();
+    fflush(stdout);
 
     if (GState->startup_script != NULL) {
         snprintf((char *) input, inputlen-1, "#script %s\n", GState->startup_script);
