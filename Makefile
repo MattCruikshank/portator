@@ -22,10 +22,13 @@ TCC_DEFINES = -DONE_SOURCE=1 -DTCC_TARGET_X86_64 \
   '-DCONFIG_TCC_LIBPATHS="zip/apps/tcc/musl-lib:zip/apps/tcc/tcc-lib"' \
   '-DCONFIG_TCC_SWITCHES="-static"'
 
-# Guest apps to build (directories with <name>/<name>.c)
+# Guest apps live under guests/
+GUEST_DIR = guests
+
+# Guest apps to build (guests/<name>/<name>.c)
 APPS = snake list new license mojozork
 
-# Go guest apps (directories with <name>/<name>.go)
+# Go guest apps (guests/<name>/<name>.go)
 GO_APPS = hello-go
 
 .PHONY: all clean clean-portator portator apps tcc package publish
@@ -68,16 +71,16 @@ portator: $(OBJS) $(BLINK_A) $(ZLIB_A)
 # Build all guest apps
 apps: portator
 	@for app in $(APPS); do \
-	  if [ -f "$$app/$$app.c" ]; then \
+	  if [ -f "$(GUEST_DIR)/$$app/$$app.c" ]; then \
 	    echo "Building $$app..."; \
 	    ./bin/portator build $$app || exit 1; \
 	  fi; \
 	done
 	@for app in $(GO_APPS); do \
-	  if [ -f "$$app/$$app.go" ]; then \
+	  if [ -f "$(GUEST_DIR)/$$app/$$app.go" ]; then \
 	    echo "Building $$app (Go)..."; \
-	    mkdir -p "$$app/bin"; \
-	    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$$app/bin/$$app" "./$$app/$$app.go" || exit 1; \
+	    mkdir -p "$(GUEST_DIR)/$$app/bin"; \
+	    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$(GUEST_DIR)/$$app/bin/$$app" "./$(GUEST_DIR)/$$app/$$app.go" || exit 1; \
 	  fi; \
 	done
 
@@ -99,25 +102,35 @@ tcc: portator
 # Package app binaries and data into the zip
 package:
 	@rm -rf bin/apps
-	@for f in */bin/*; do \
+	@for f in $(GUEST_DIR)/*/bin/*; do \
 	  if [ -f "$$f" ]; then \
 	    name=$$(basename "$$f"); \
 	    mkdir -p "bin/apps/$$name/bin"; \
 	    cp "$$f" "bin/apps/$$name/bin/$$name"; \
 	  fi; \
 	done
+	@# Also pick up tcc/bin/tcc (not under guests/)
+	@if [ -f "$(TCC_DIR)/bin/tcc" ]; then \
+	  mkdir -p "bin/apps/tcc/bin"; \
+	  cp "$(TCC_DIR)/bin/tcc" "bin/apps/tcc/bin/tcc"; \
+	fi
 	@# Copy app data directories (<name>/zip/* -> apps/<name>/)
-	@for app in */; do \
-	  app=$${app%/}; \
-	  if [ -d "$$app/zip" ]; then \
+	@for app in $(GUEST_DIR)/*/; do \
+	  app=$$(basename "$$app"); \
+	  if [ -d "$(GUEST_DIR)/$$app/zip" ]; then \
 	    mkdir -p "bin/apps/$$app"; \
-	    cp -r "$$app/zip/"* "bin/apps/$$app/"; \
+	    cp -r "$(GUEST_DIR)/$$app/zip/"* "bin/apps/$$app/"; \
 	  fi; \
 	done
+	@# Copy TCC toolchain data
+	@if [ -d "$(TCC_DIR)/zip" ]; then \
+	  mkdir -p "bin/apps/tcc"; \
+	  cp -r "$(TCC_DIR)/zip/"* "bin/apps/tcc/"; \
+	fi
 	@# Copy legacy data paths for compatibility
-	@if [ -d new/templates ]; then mkdir -p bin/apps/new && cp -r new/templates bin/apps/new/; fi
-	@if [ -d mojozork/data ]; then mkdir -p bin/apps/mojozork && cp -r mojozork/data bin/apps/mojozork/; fi
-	@if [ -d license/data ]; then mkdir -p bin/apps/license && cp -r license/data bin/apps/license/; fi
+	@if [ -d $(GUEST_DIR)/new/templates ]; then mkdir -p bin/apps/new && cp -r $(GUEST_DIR)/new/templates bin/apps/new/; fi
+	@if [ -d $(GUEST_DIR)/mojozork/data ]; then mkdir -p bin/apps/mojozork && cp -r $(GUEST_DIR)/mojozork/data bin/apps/mojozork/; fi
+	@if [ -d $(GUEST_DIR)/license/data ]; then mkdir -p bin/apps/license && cp -r $(GUEST_DIR)/license/data bin/apps/license/; fi
 	@cd bin && mv portator portator.zip && zip -qr portator.zip apps && mv portator.zip portator
 	@rm -rf bin/apps
 	@echo "Packaged apps into bin/portator"

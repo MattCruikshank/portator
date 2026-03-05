@@ -51,10 +51,10 @@ cd publish && ./portator list
 - `include/portator.h` — Guest-side API: syscall numbers (0x7000–0x7007), event structs, inline asm helpers
 - `Makefile` — Builds host, then uses `./bin/portator build` to compile each guest app
 
-**Guest app convention**: Each app lives in `<name>/<name>.c` and compiles to `<name>/bin/<name>`. The Makefile packages these into the ZIP under `apps/<name>/bin/<name>`. App data goes in `<name>/zip/` (or legacy paths `<name>/data/`, `<name>/templates/`).
+**Guest app convention**: Each app lives in `guests/<name>/<name>.c` and compiles to `guests/<name>/bin/<name>`. The Makefile packages these into the ZIP under `apps/<name>/bin/<name>`. App data goes in `guests/<name>/zip/` (or legacy paths `guests/<name>/data/`, `guests/<name>/templates/`).
 
 **Program discovery**: Scans two locations, local takes precedence:
-1. `<name>/bin/<name>` (relative to cwd)
+1. `guests/<name>/bin/<name>` (relative to cwd)
 2. `/zip/apps/<name>/bin/<name>` (inside APE binary)
 
 **Custom syscalls**: Defined in `portator.h`, handled by `HandlePortatorSyscall()` in main.c. Variable-length responses (version, list) use probe/fill: call with NULL to get size, then with buffer to fill.
@@ -101,5 +101,5 @@ So a guest doing `fopen("zip/apps/license/data/portator/LICENSE", "r")` reads di
 - JIT is currently disabled (`--disable-jit`) — re-enabling is tracked in Claude-TODO.md.
 - `CmdRunForked()` forks before executing guests so the emulator can be invoked repeatedly without re-initialization issues.
 - Console guests use standard C I/O. Only graphical/web guests need the custom syscall API.
-- App data goes in `<name>/zip/` in the source tree. The Makefile's `package` step copies `<name>/zip/*` → `apps/<name>/` in the APE zip. Legacy paths (`<name>/data/`, `<name>/templates/`) are also supported.
+- App data goes in `guests/<name>/zip/` in the source tree. The Makefile's `package` step copies `guests/<name>/zip/*` → `apps/<name>/` in the APE zip. Legacy paths (`guests/<name>/data/`, `guests/<name>/templates/`) are also supported.
 - Always run full `make` (not just `make portator`) to ensure `publish/portator` is updated. The user tests from `publish/`.

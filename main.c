@@ -181,14 +181,19 @@ static int HasCommand(const char *cmd) {
 static const char *FindSource(const char *name, char *buf, size_t buflen) {
   static const char *c_exts[] = { ".c", NULL };
   static const char *cpp_exts[] = { ".cpp", ".cc", ".c++", NULL };
+  /* Search both guests/<name>/<name>.ext and <name>/<name>.ext (local) */
+  static const char *prefixes[] = { "guests", ".", NULL };
   const char **exts;
-  for (exts = c_exts; *exts; exts++) {
-    snprintf(buf, buflen, "%s/%s%s", name, name, *exts);
-    if (!access(buf, F_OK)) return *exts;
-  }
-  for (exts = cpp_exts; *exts; exts++) {
-    snprintf(buf, buflen, "%s/%s%s", name, name, *exts);
-    if (!access(buf, F_OK)) return *exts;
+  const char **pfx;
+  for (pfx = prefixes; *pfx; pfx++) {
+    for (exts = c_exts; *exts; exts++) {
+      snprintf(buf, buflen, "%s/%s/%s%s", *pfx, name, name, *exts);
+      if (!access(buf, F_OK)) return *exts;
+    }
+    for (exts = cpp_exts; *exts; exts++) {
+      snprintf(buf, buflen, "%s/%s/%s%s", *pfx, name, name, *exts);
+      if (!access(buf, F_OK)) return *exts;
+    }
   }
   return NULL;
 }
@@ -256,12 +261,17 @@ static int CmdBuild(int argc, char **argv) {
     return 1;
   }
 
-  snprintf(out, sizeof(out), "%s/bin/%s", name, name);
-
-  /* Ensure bin/ directory exists */
+  /* Derive output dir from source path (strip /<name>.ext to get parent) */
   {
+    char srcdir[PATH_MAX];
+    strncpy(srcdir, src, sizeof(srcdir));
+    srcdir[sizeof(srcdir) - 1] = '\0';
+    char *slash = strrchr(srcdir, '/');
+    if (slash) *slash = '\0';
+    snprintf(out, sizeof(out), "%s/bin/%s", srcdir, name);
+
     char bindir[PATH_MAX];
-    snprintf(bindir, sizeof(bindir), "%s/bin", name);
+    snprintf(bindir, sizeof(bindir), "%s/bin", srcdir);
     if (MakeDir(bindir)) return 1;
   }
 
@@ -420,8 +430,8 @@ static char *BuildAppListJson(void) {
 
   len += snprintf(json + len, cap - len, "{\"apps\":[");
 
-  /* Scan local ./<name>/bin/<name> and /zip/apps/<name>/bin/<name> */
-  const char *dirs[] = { ".", "/zip/apps", NULL };
+  /* Scan local guests/<name>/bin/<name> and /zip/apps/<name>/bin/<name> */
+  const char *dirs[] = { "guests", "/zip/apps", NULL };
   int di;
   for (di = 0; dirs[di]; di++) {
     d = opendir(dirs[di]);
@@ -524,8 +534,8 @@ static int CmdRunForked(int argc, char **argv) {
   }
   name = argv[2];
 
-  /* Try local first, then bundled */
-  snprintf(elfpath, sizeof(elfpath), "%s/bin/%s", name, name);
+  /* Try local first (guests/<name>/bin/<name>), then bundled */
+  snprintf(elfpath, sizeof(elfpath), "guests/%s/bin/%s", name, name);
   LOGF("CmdRun: trying local path '%s'", elfpath);
   if (access(elfpath, F_OK)) {
     LOGF("CmdRun: local access failed (errno %d), trying bundled", errno);
@@ -753,7 +763,7 @@ int main(int argc, char *argv[]) {
   /* Try as a guest app: portator <name> [args...] -> portator run <name> [args...] */
   {
     char probe[PATH_MAX];
-    snprintf(probe, sizeof(probe), "%s/bin/%s", argv[1], argv[1]);
+    snprintf(probe, sizeof(probe), "guests/%s/bin/%s", argv[1], argv[1]);
     int found = !access(probe, F_OK);
     if (!found) {
       snprintf(probe, sizeof(probe), "/zip/apps/%s/bin/%s", argv[1], argv[1]);
