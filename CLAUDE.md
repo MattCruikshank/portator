@@ -28,7 +28,7 @@ This runs: `clean-portator → portator → apps → package → publish`
 
 ### Run a guest app
 ```bash
-./bin/portator run <name>      # e.g. ./bin/portator run snake
+./bin/portator <name>          # e.g. ./bin/portator snake
 ```
 
 ### Inspect the zip contents of the binary
@@ -57,7 +57,7 @@ cd publish && ./portator list
 1. `guests/<name>/bin/<name>` (relative to cwd)
 2. `/zip/apps/<name>/bin/<name>` (inside APE binary)
 
-**Custom syscalls**: Defined in `portator.h`, handled by `HandlePortatorSyscall()` in main.c. Variable-length responses (version, list) use probe/fill: call with NULL to get size, then with buffer to fill.
+**Custom syscalls**: Defined in `portator.h`, handled by `HandlePortatorSyscall()` in main.c. Syscalls 0x7000–0x7008 include VERSION, LIST, and LAUNCH. LAUNCH (0x7008) forks a new Blink VM to run another guest, supports argv and envp via `portator_launch_ex()`. Variable-length responses (version, list) use probe/fill: call with NULL to get size, then with buffer to fill.
 
 ## Dependencies
 
@@ -73,6 +73,9 @@ cd publish && ./portator list
 
 | App | Purpose |
 |-----|---------|
+| shell | Interactive shell with history, cd/pwd/ls, launches other apps via LAUNCH syscall |
+| ls | List directory contents (reads PWD env var from shell) |
+| init | Extract shared include/src files from zip to local filesystem |
 | snake | Terminal snake game |
 | list | Program discovery (calls LIST syscall, parses JSON with cJSON) |
 | new | Project scaffolding (uses Mustach templates from `new/templates/`) |
