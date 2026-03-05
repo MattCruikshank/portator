@@ -17,6 +17,7 @@
 #define PORTATOR_SYS_APP_TYPE 0x7005
 #define PORTATOR_SYS_VERSION 0x7006
 #define PORTATOR_SYS_LIST    0x7007
+#define PORTATOR_SYS_LAUNCH  0x7008
 
 /* App types */
 #define PORTATOR_APP_CONSOLE  0
@@ -68,6 +69,12 @@ static inline long portator_version(char *buf, long len) {
    Call with allocated buffer to fill it. Returns size or -1. */
 static inline long portator_list(char *buf, long len) {
     return portator_syscall(PORTATOR_SYS_LIST, (long)buf, len, 0);
+}
+
+/* Launch another guest app by name. Blocks until the child exits.
+   Returns the child's exit code, or -1 on error. */
+static inline long portator_launch(const char *name) {
+    return portator_syscall(PORTATOR_SYS_LAUNCH, (long)name, 0, 0);
 }
 
 #endif /* PORTATOR_H_ */

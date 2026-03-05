@@ -40,6 +40,7 @@ static char g_pathbuf[PATH_MAX];
 
 static void Print(int fd, const char *s);
 static int CmdRun(int argc, char **argv);
+static int CmdRunForked(int argc, char **argv);
 
 /*─────────────────────────────────────────────────────────────────────────────╗
 │ portator new — project scaffolding                                          │
@@ -494,6 +495,30 @@ static i64 HandlePortatorSyscall(struct Machine *m, u64 ax, u64 di, u64 si,
       i64 rc = CopyToUserWrite(m, di, (void *)json, jlen) ? -1 : (i64)jlen;
       free(json);
       return rc;
+    }
+    case 0x7008: {  /* launch: di=name_ptr (guest string) */
+      char name[256];
+      /* Read guest string byte by byte until NUL */
+      size_t i;
+      for (i = 0; i < sizeof(name) - 1; i++) {
+        u8 byte;
+        if (CopyFromUserRead(m, &byte, di + i, 1)) return -1;
+        name[i] = byte;
+        if (!byte) break;
+      }
+      name[sizeof(name) - 1] = '\0';
+      /* Fork and run the target guest */
+      pid_t pid = fork();
+      if (pid < 0) return -1;
+      if (pid == 0) {
+        char *run_argv[] = { (char *)"portator", (char *)"run", name, NULL };
+        CmdRunForked(3, run_argv);
+        _exit(127);
+      }
+      int status;
+      if (waitpid(pid, &status, 0) < 0) return -1;
+      if (WIFEXITED(status)) return WEXITSTATUS(status);
+      return -1;
     }
     default:
       return -1;

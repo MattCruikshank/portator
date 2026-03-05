@@ -26,7 +26,7 @@ TCC_DEFINES = -DONE_SOURCE=1 -DTCC_TARGET_X86_64 \
 GUEST_DIR = guests
 
 # Guest apps to build (guests/<name>/<name>.c)
-APPS = snake list new license mojozork
+APPS = snake list new license mojozork shell
 
 # Go guest apps (guests/<name>/<name>.go)
 GO_APPS = hello-go
