@@ -1,3 +1,6 @@
 [submodule "blink"]
 	path = blink
 	url = https://github.com/MattCruikshank/blink
+[submodule "tcc"]
+	path = tcc
+	url = https://github.com/MattCruikshank/tinycc.git
